@@ -65,15 +65,30 @@ body {
 }
 
 /* ── Root App Layout ─────────────────────────────────────────────────────────
- * Three-column layout: sidebar | main panel | controls
+ * Three-column layout: sidebar | resizer | main panel | resizer | controls
  */
 .app {
   display: grid;
-  grid-template-columns: 180px 1fr 220px;
+  grid-template-columns: var(--sidebar-width, 180px) 4px 1fr 4px var(--controls-width, 240px);
   grid-template-rows: 100vh;
   height: 100vh;
+  width: 100vw;
   overflow: hidden;
-  background-color: var(--color-bg-dark);
+  background-color: var(--color-bg-darkest);
+}
+
+/* ── Resizer Handles ───────────────────────────────────────────────────────── */
+.app__resizer {
+  width: 4px;
+  background-color: transparent;
+  cursor: col-resize;
+  transition: background-color var(--transition-fast);
+  z-index: 100;
+}
+
+.app__resizer:hover,
+.app__resizer--active {
+  background-color: var(--color-accent);
 }
 
 .app--loading,
@@ -82,6 +97,7 @@ body {
   align-items: center;
   justify-content: center;
   height: 100vh;
+  width: 100vw;
   font-size: var(--font-size-lg);
   color: var(--color-text-muted);
 }
@@ -91,9 +107,11 @@ body {
   flex-direction: column;
   padding: var(--space-lg);
   overflow-y: auto;
+  overflow-x: hidden; /* Prevent horizontal scroll in main */
   background-color: var(--color-bg-dark);
-  border-left:  1px solid var(--color-border);
-  border-right: 1px solid var(--color-border);
+  border-left:  none; /* Borders handled by resizers now */
+  border-right: none;
+  min-width: 300px; /* Ensure main area doesn't disappear */
 }
 
 .app__panel-title {
@@ -105,12 +123,17 @@ body {
   letter-spacing: 0.08em;
   border-bottom: 1px solid var(--color-border);
   padding-bottom: var(--space-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .app__controls {
   padding: var(--space-lg);
   overflow-y: auto;
+  overflow-x: hidden; /* Crucial: hide overflow in the controls panel */
   background-color: var(--color-bg-mid);
+  min-width: 150px;
 }
 
 /* ── Shared Typography ───────────────────────────────────────────────────────── */

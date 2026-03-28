@@ -54,8 +54,9 @@ function scanLibrary(soundsDir) {
 
       const filePath = path.join(categoryPath, file.name);
       const trackName = cleanTrackName(file.name);
+      const format = ext.slice(1); // "mp3", "ogg", etc.
 
-      tracks.push({ name: trackName, path: filePath });
+      tracks.push({ name: trackName, path: filePath, format });
     });
 
     // Always include the category, even if it has no tracks yet

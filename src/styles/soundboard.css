@@ -45,10 +45,15 @@
   color: #fff;
 }
 
-/* Active flash — triggered for 300ms after click for visual feedback */
-.soundboard__button--active {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-  color: #fff;
+/* Green border when SFX is active */
+.soundboard__button--playing {
+  border-color: #4ade80 !important;
+  box-shadow: 0 0 8px rgba(74, 222, 128, 0.4);
+}
+
+/* Red border briefly when sound is manually stopped */
+.soundboard__button--stopping {
+  border-color: #f87171 !important;
+  box-shadow: 0 0 8px rgba(248, 113, 113, 0.4);
   transform: scale(0.96);
 }

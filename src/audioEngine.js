@@ -26,20 +26,27 @@ const howlCache = {};
 /**
  * getHowl
  * Returns a cached Howl instance for the given URL, creating one if needed.
- * All instances are created with HTML5 Audio disabled so Howler streams
- * through its own audio context (important for looping accuracy).
+ * Uses html5: true by default to ensure better support for streaming large files
+ * and custom Electron protocols (prevents "no sound" on initial load).
  *
  * @param {string} audioUrl - app:// URL for the track
  * @param {boolean} loop    - Whether the Howl should loop
+ * @param {string} format   - Audio format (mp3, ogg, etc.)
  * @returns {Howl}
  */
-function getHowl(audioUrl, loop = false) {
+function getHowl(audioUrl, loop = false, format = 'mp3') {
   if (!howlCache[audioUrl]) {
     howlCache[audioUrl] = new Howl({
       src: [audioUrl],
+      format: [format],
       loop,
-      html5: false,  // Use Web Audio API for precise looping and crossfade
+      html5: true,   // Enabled for better streaming/protocol support
       preload: true,
+      onplayerror: (id, error) => {
+        console.error('Playback error for', audioUrl, error);
+        // Attempt to recover if the context was suspended
+        Howler.unload();
+      }
     });
   }
   return howlCache[audioUrl];
@@ -49,17 +56,28 @@ function getHowl(audioUrl, loop = false) {
 
 /**
  * playTrack
- * Starts playback of a single track. Used for atmosphere (looping) tracks.
+ * Starts playback of a single track. Ensures the track is not already playing
+ * to prevent overlapping "cloned" sounds.
  *
- * @param {string}  audioUrl - app:// URL
- * @param {boolean} loop     - Whether to loop (true for atmosphere, false for SFX)
- * @param {number}  volume   - Initial volume 0..1
- * @returns {Howl} The playing Howl instance (so the caller can track it)
+ * @param {string}   audioUrl - app:// URL
+ * @param {boolean}  loop     - Whether to loop
+ * @param {number}   volume   - Initial volume 0..1
+ * @param {string}   format   - Extension format
+ * @param {function} onEnd    - Optional callback when sound finishes
+ * @returns {Howl}
  */
-function playTrack(audioUrl, loop = false, volume = 1) {
-  const howl = getHowl(audioUrl, loop);
+function playTrack(audioUrl, loop = false, volume = 1, format = 'mp3', onEnd = null) {
+  const howl = getHowl(audioUrl, loop, format);
   howl.loop(loop);
   howl.volume(volume);
+
+  // Update callbacks
+  if (onEnd) {
+    howl.off('end'); // Remove previous listeners
+    howl.on('end', onEnd);
+  }
+
+  // If already playing, don't start it again (prevents multiple overlapping instances)
   if (!howl.playing()) {
     howl.play();
   }
@@ -68,13 +86,11 @@ function playTrack(audioUrl, loop = false, volume = 1) {
 
 /**
  * stopTrack
- * Stops playback of a track immediately (no fade).
- *
- * @param {string} audioUrl - app:// URL
+ * Stops playback of a track immediately and unloads it from memory if needed.
  */
 function stopTrack(audioUrl) {
   const howl = howlCache[audioUrl];
-  if (howl && howl.playing()) {
+  if (howl) {
     howl.stop();
   }
 }

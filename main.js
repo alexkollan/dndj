@@ -89,12 +89,28 @@ app.whenReady().then(() => {
   protocol.handle('app', (request) => {
     // The URL looks like:  app://audio/<url-encoded-absolute-path>
     const requestUrl = new URL(request.url);
-    // Decode the path component (handles spaces and special chars)
-    const filePath = decodeURIComponent(requestUrl.pathname.replace(/^\/audio/, ''));
+    
+    // The URL parser might include a leading slash in the pathname.
+    // We strip the "/audio" prefix to get the encoded file path.
+    const encodedPath = requestUrl.pathname.replace(/^\/audio/, '');
+    let filePath = decodeURIComponent(encodedPath);
+
+    // Cross-platform path normalization:
+    // On Windows, "/C:/..." needs the leading slash removed.
+    // On Mac/Linux, "Users/..." needs the leading slash restored if it was stripped.
+    if (process.platform === 'win32') {
+      if (filePath.startsWith('/')) filePath = filePath.slice(1);
+    } else {
+      if (!filePath.startsWith('/')) filePath = '/' + filePath;
+    }
 
     // Security: only serve files that live inside the /sounds directory.
     const resolvedPath = path.resolve(filePath);
-    if (!resolvedPath.startsWith(SOUNDS_DIR)) {
+    const soundsDirBase = SOUNDS_DIR.toLowerCase();
+    const resolvedPathBase = resolvedPath.toLowerCase();
+
+    if (!resolvedPathBase.startsWith(soundsDirBase)) {
+      console.warn(`[main] Blocked access to file outside sounds dir: ${resolvedPath}`);
       return new Response('Forbidden', { status: 403 });
     }
 
