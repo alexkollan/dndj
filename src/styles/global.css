@@ -1,0 +1,183 @@
+/* global.css — Dark Mode Base Styles & CSS Variables
+ * All colour, spacing, and typography tokens are defined here.
+ * Import this file once in main.jsx; all other CSS files reference these vars.
+ */
+
+/* ── Design Tokens ─────────────────────────────────────────────────────────── */
+:root {
+  /* Colour palette — deep navy / dark purple theme */
+  --color-bg-darkest:   #0d0d1a;
+  --color-bg-dark:      #1a1a2e;
+  --color-bg-mid:       #16213e;
+  --color-bg-light:     #0f3460;
+  --color-accent:       #e94560;
+  --color-accent-hover: #c73652;
+  --color-text-primary: #e8e8f0;
+  --color-text-muted:   #8888a8;
+  --color-border:       #2a2a4a;
+  --color-playing:      #2ecc71;
+  --color-playing-bg:   rgba(46, 204, 113, 0.12);
+
+  /* Spacing scale */
+  --space-xs:   4px;
+  --space-sm:   8px;
+  --space-md:   16px;
+  --space-lg:   24px;
+  --space-xl:   32px;
+
+  /* Typography */
+  --font-family:       'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-size-sm:      0.8rem;
+  --font-size-base:    1rem;
+  --font-size-lg:      1.2rem;
+  --font-size-xl:      1.5rem;
+
+  /* Borders & radii */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-med:  250ms ease;
+}
+
+/* ── Reset ──────────────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  background-color: var(--color-bg-dark);
+  color: var(--color-text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Root App Layout ─────────────────────────────────────────────────────────
+ * Three-column layout: sidebar | main panel | controls
+ */
+.app {
+  display: grid;
+  grid-template-columns: 180px 1fr 220px;
+  grid-template-rows: 100vh;
+  height: 100vh;
+  overflow: hidden;
+  background-color: var(--color-bg-dark);
+}
+
+.app--loading,
+.app--error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  font-size: var(--font-size-lg);
+  color: var(--color-text-muted);
+}
+
+.app__main {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-lg);
+  overflow-y: auto;
+  background-color: var(--color-bg-dark);
+  border-left:  1px solid var(--color-border);
+  border-right: 1px solid var(--color-border);
+}
+
+.app__panel-title {
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-lg);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: var(--space-sm);
+}
+
+.app__controls {
+  padding: var(--space-lg);
+  overflow-y: auto;
+  background-color: var(--color-bg-mid);
+}
+
+/* ── Shared Typography ───────────────────────────────────────────────────────── */
+h1, h2, h3 {
+  color: var(--color-text-primary);
+}
+
+code {
+  background: var(--color-bg-darkest);
+  padding: 2px var(--space-xs);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-accent);
+}
+
+/* ── Shared Button Base ──────────────────────────────────────────────────────── */
+button {
+  cursor: pointer;
+  border: none;
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ── Shared Range Input ──────────────────────────────────────────────────────── */
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: var(--color-border);
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+input[type='range']::-webkit-slider-thumb:hover {
+  background: var(--color-accent-hover);
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg-darkest);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
