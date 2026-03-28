@@ -1,0 +1,150 @@
+/* atmosphere.css — Atmosphere Player & TrackCard Styles */
+
+/* ── Atmosphere Player Container ─────────────────────────────────────────── */
+.atmosphere-player {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.atmosphere-player__empty {
+  color: var(--color-text-muted);
+  font-style: italic;
+  padding: var(--space-lg) 0;
+}
+
+.atmosphere-player__track-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+/* ── Crossfade Helper ────────────────────────────────────────────────────── */
+.atmosphere-player__crossfade-hint {
+  margin-top: var(--space-md);
+  padding: var(--space-md);
+  background: var(--color-bg-mid);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.atmosphere-player__crossfade-hint p {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-sm);
+}
+
+.atmosphere-player__crossfade-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.atmosphere-player__crossfade-btn {
+  padding: var(--space-xs) var(--space-md);
+  background: var(--color-bg-light);
+  color: var(--color-text-primary);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  border: 1px solid var(--color-border);
+}
+
+.atmosphere-player__crossfade-btn:hover {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+}
+
+/* ── Track Card ──────────────────────────────────────────────────────────── */
+.track-card {
+  padding: var(--space-md);
+  background: var(--color-bg-mid);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.track-card--playing {
+  border-color: var(--color-playing);
+  background: var(--color-playing-bg);
+}
+
+.track-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.track-card__loop-badge {
+  font-size: var(--font-size-sm);
+  color: var(--color-playing);
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.track-card__name {
+  flex: 1;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--font-size-base);
+}
+
+.track-card__toggle {
+  padding: var(--space-xs) var(--space-md);
+  background: var(--color-bg-light);
+  color: var(--color-text-primary);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  flex-shrink: 0;
+  min-width: 48px;
+  text-align: center;
+  border: 1px solid var(--color-border);
+}
+
+.track-card__toggle:hover {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+}
+
+.track-card__toggle--stop {
+  background: var(--color-playing);
+  color: var(--color-bg-darkest);
+  border-color: var(--color-playing);
+  font-weight: 700;
+}
+
+.track-card__toggle--stop:hover {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+}
+
+/* ── Volume Control within TrackCard ─────────────────────────────────────── */
+.track-card__volume {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}
+
+.track-card__volume-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  width: 24px;
+}
+
+.track-card__volume-slider {
+  flex: 1;
+}
+
+.track-card__volume-value {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  width: 36px;
+  text-align: right;
+  flex-shrink: 0;
+}

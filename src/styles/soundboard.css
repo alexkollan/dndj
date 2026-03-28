@@ -1,0 +1,54 @@
+/* soundboard.css — Soundboard SFX Grid Styles */
+
+/* ── Soundboard Container ─────────────────────────────────────────────────── */
+.soundboard {
+  width: 100%;
+}
+
+.soundboard__empty {
+  color: var(--color-text-muted);
+  font-style: italic;
+  padding: var(--space-lg) 0;
+}
+
+/* ── SFX Button Grid ─────────────────────────────────────────────────────── */
+.soundboard__grid {
+  display: grid;
+  /* Auto-fill columns: each button is at least 140px, max 1fr */
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-md);
+}
+
+/* ── Individual SFX Button ───────────────────────────────────────────────── */
+.soundboard__button {
+  padding: var(--space-md) var(--space-sm);
+  background: var(--color-bg-mid);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-height: 64px;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.soundboard__button:hover {
+  background: var(--color-bg-light);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
+/* Active flash — triggered for 300ms after click for visual feedback */
+.soundboard__button--active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+  transform: scale(0.96);
+}

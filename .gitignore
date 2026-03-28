@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+# Ignore user audio files but keep the directory structure
+sounds/**/*.mp3
+sounds/**/*.ogg
+sounds/**/*.wav
+sounds/**/*.webm
