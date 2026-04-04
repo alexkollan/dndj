@@ -1,15 +1,28 @@
-node_modules/
-dist/
+node_modules
+dist
+dist-electron
+*.local
+.env
+.env.*
 .DS_Store
-*.log
 
-# Ignore audio files and executables
+# Data and Database
+data/
+
+# Binaries / Tools
+*.exe
+yt-dlp_macos
+
+# Audio Files
 *.mp3
 *.wav
 *.ogg
 *.webm
-*.exe
-yt-dlp_macos
+*.flac
+*.m4a
 
-# Ensure directory-keeping files are still tracked
-!**/.gitkeep
+# Sounds directory
+# Ignore all files in subdirectories of sounds/
+sounds/**/*
+# But keep .gitkeep files so the directory structure is preserved in git
+!sounds/**/.gitkeep

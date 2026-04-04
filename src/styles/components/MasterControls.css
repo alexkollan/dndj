@@ -1,0 +1,165 @@
+/* src/styles/components/MasterControls.css */
+.controls-panel {
+  background: var(--bg-sidebar);
+  border-left: 1px solid var(--border-subtle);
+  padding: var(--s-8) var(--s-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-8);
+  overflow-y: auto;
+}
+
+.controls-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: var(--s-2);
+}
+
+.controls-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.controls-subtitle {
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+
+/* ── Master Slider ── */
+.master-vol-container {
+  background: var(--bg-panel);
+  padding: var(--s-6);
+  border-radius: 16px;
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  align-items: center;
+}
+
+.master-vol-val {
+  font-size: 2rem;
+  font-weight: 900;
+  color: var(--accent);
+}
+
+.master-vol-slider {
+  width: 100%;
+}
+
+/* ── Category Mix Rows ── */
+.mixer-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.mixer-item {
+  display: grid;
+  grid-template-columns: 1fr 100px;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-2) var(--s-3);
+  background: rgba(255,255,255, 0.02);
+  border-radius: 8px;
+}
+
+.mixer-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Actions ── */
+.btn-save-scene {
+  width: 100%;
+  padding: var(--s-3);
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--t-fast);
+  margin-top: var(--s-4);
+}
+
+.btn-save-scene:hover {
+  background: var(--accent-muted);
+  box-shadow: 0 0 15px var(--accent-glow);
+}
+
+.scene-save-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin-top: var(--s-4);
+}
+
+.scene-name-input {
+  background: var(--bg-app);
+  border: 1px solid var(--accent);
+  color: var(--text-primary);
+  padding: var(--s-2);
+  border-radius: 6px;
+  outline: none;
+  font-size: 0.9rem;
+}
+
+.scene-save-actions {
+  display: flex;
+  gap: var(--s-2);
+}
+
+.btn-save-confirm {
+  flex: 1;
+  background: var(--accent);
+  color: var(--bg-app);
+  border: none;
+  padding: var(--s-2);
+  border-radius: 4px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-save-cancel {
+  width: 32px;
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-stop-all {
+  width: 100%;
+  padding: var(--s-4);
+  background: #ef4444; /* Bright red */
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: 1rem;
+  cursor: pointer;
+  box-shadow: 0 4px 0 #b91c1c;
+  transition: all var(--t-fast);
+  margin-top: auto;
+}
+
+.btn-stop-all:hover {
+  background: #f87171;
+  transform: translateY(-1px);
+}
+
+.btn-stop-all:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #b91c1c;
+}

@@ -1,206 +1,75 @@
-/* global.css — Dark Mode Base Styles & CSS Variables
- * All colour, spacing, and typography tokens are defined here.
- * Import this file once in main.jsx; all other CSS files reference these vars.
- */
-
-/* ── Design Tokens ─────────────────────────────────────────────────────────── */
+/* src/styles/global.css — Design Tokens & Core Layout */
 :root {
-  /* Colour palette — deep navy / dark purple theme */
-  --color-bg-darkest:   #0d0d1a;
-  --color-bg-dark:      #1a1a2e;
-  --color-bg-mid:       #16213e;
-  --color-bg-light:     #0f3460;
-  --color-accent:       #e94560;
-  --color-accent-hover: #c73652;
-  --color-text-primary: #e8e8f0;
-  --color-text-muted:   #8888a8;
-  --color-border:       #2a2a4a;
-  --color-playing:      #2ecc71;
-  --color-playing-bg:   rgba(46, 204, 113, 0.12);
+  /* ── Modern Dark Palette (Slate & Emerald) ── */
+  --bg-app:         #020617; /* Slate 950 */
+  --bg-sidebar:     #0b1120; /* Slightly lighter for depth */
+  --bg-panel:       rgba(30, 41, 59, 0.4); /* Slate 800 with glass opacity */
+  --bg-card:        rgba(30, 41, 59, 0.6);
+  --bg-card-hover:  rgba(51, 65, 85, 0.8);
+  
+  --accent:         #10b981; /* Emerald 500 */
+  --accent-glow:    rgba(16, 185, 129, 0.2);
+  --accent-muted:   rgba(16, 185, 129, 0.1);
+  
+  --text-primary:   #f8fafc; /* Slate 50 */
+  --text-secondary: #94a3b8; /* Slate 400 */
+  --text-muted:     #475569; /* Slate 600 */
+  
+  --border-subtle:  rgba(255, 255, 255, 0.05);
+  --border-glow:    rgba(16, 185, 129, 0.4);
 
-  /* Spacing scale */
-  --space-xs:   4px;
-  --space-sm:   8px;
-  --space-md:   16px;
-  --space-lg:   24px;
-  --space-xl:   32px;
+  /* ── Spacing Scale ── */
+  --s-1: 0.25rem; --s-2: 0.5rem; --s-3: 0.75rem; 
+  --s-4: 1rem;    --s-6: 1.5rem;  --s-8: 2rem;
 
-  /* Typography */
-  --font-family:       'Segoe UI', system-ui, -apple-system, sans-serif;
-  --font-size-sm:      0.8rem;
-  --font-size-base:    1rem;
-  --font-size-lg:      1.2rem;
-  --font-size-xl:      1.5rem;
-
-  /* Borders & radii */
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-
-  /* Transitions */
-  --transition-fast: 150ms ease;
-  --transition-med:  250ms ease;
+  /* ── Transitions ── */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --t-fast: 150ms var(--ease);
+  --t-base: 300ms var(--ease);
 }
 
-/* ── Reset ──────────────────────────────────────────────────────────────────── */
+/* ── Reset & Typography ── */
 *, *::before, *::after {
   box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-html, body, #root {
-  height: 100%;
-  width: 100%;
-  overflow: hidden;
+  margin: 0; padding: 0;
 }
 
 body {
-  background-color: var(--color-bg-dark);
-  color: var(--color-text-primary);
-  font-family: var(--font-family);
-  font-size: var(--font-size-base);
-  line-height: 1.5;
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  line-height: 1.5;
 }
 
-/* ── Root App Layout ─────────────────────────────────────────────────────────
- * Three-column layout: sidebar | resizer | main panel | resizer | controls
- */
-.app {
+/* ── Core Layout ── */
+.app-container {
   display: grid;
-  grid-template-columns: var(--sidebar-width, 180px) 4px 1fr 4px var(--controls-width, 240px);
-  grid-template-rows: 100vh;
+  grid-template-columns: var(--sidebar-width, 240px) 1px 1fr 1px var(--controls-width, 300px);
   height: 100vh;
   width: 100vw;
-  overflow: hidden;
-  background-color: var(--color-bg-darkest);
+  background-color: var(--bg-app);
 }
 
-/* ── Resizer Handles ───────────────────────────────────────────────────────── */
-.app__resizer {
-  width: 4px;
-  background-color: transparent;
+/* Modularizing the resizers */
+.resizer {
+  background-color: var(--border-subtle);
   cursor: col-resize;
-  transition: background-color var(--transition-fast);
-  z-index: 100;
+  transition: background-color var(--t-fast);
+  z-index: 50;
 }
 
-.app__resizer:hover,
-.app__resizer--active {
-  background-color: var(--color-accent);
+.resizer:hover {
+  background-color: var(--accent);
+  box-shadow: 0 0 10px var(--accent-glow);
 }
 
-.app--loading,
-.app--error {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100vh;
-  width: 100vw;
-  font-size: var(--font-size-lg);
-  color: var(--color-text-muted);
-}
-
-.app__main {
-  display: flex;
-  flex-direction: column;
-  padding: var(--space-lg);
-  overflow-y: auto;
-  overflow-x: hidden; /* Prevent horizontal scroll in main */
-  background-color: var(--color-bg-dark);
-  border-left:  none; /* Borders handled by resizers now */
-  border-right: none;
-  min-width: 300px; /* Ensure main area doesn't disappear */
-}
-
-.app__panel-title {
-  font-size: var(--font-size-xl);
-  font-weight: 700;
-  color: var(--color-text-primary);
-  margin-bottom: var(--space-lg);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  border-bottom: 1px solid var(--color-border);
-  padding-bottom: var(--space-sm);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.app__controls {
-  padding: var(--space-lg);
-  overflow-y: auto;
-  overflow-x: hidden; /* Crucial: hide overflow in the controls panel */
-  background-color: var(--color-bg-mid);
-  min-width: 150px;
-}
-
-/* ── Shared Typography ───────────────────────────────────────────────────────── */
-h1, h2, h3 {
-  color: var(--color-text-primary);
-}
-
-code {
-  background: var(--color-bg-darkest);
-  padding: 2px var(--space-xs);
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-sm);
-  color: var(--color-accent);
-}
-
-/* ── Shared Button Base ──────────────────────────────────────────────────────── */
-button {
-  cursor: pointer;
-  border: none;
-  font-family: var(--font-family);
-  font-size: var(--font-size-base);
-  transition: background-color var(--transition-fast), color var(--transition-fast);
-}
-
-button:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-}
-
-/* ── Shared Range Input ──────────────────────────────────────────────────────── */
-input[type='range'] {
-  -webkit-appearance: none;
-  appearance: none;
-  height: 4px;
-  background: var(--color-border);
-  border-radius: 2px;
-  cursor: pointer;
-}
-
-input[type='range']::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--color-accent);
-  cursor: pointer;
-  transition: background var(--transition-fast);
-}
-
-input[type='range']::-webkit-slider-thumb:hover {
-  background: var(--color-accent-hover);
-}
-
-/* ── Scrollbar ───────────────────────────────────────────────────────────────── */
-::-webkit-scrollbar {
-  width: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: var(--color-bg-darkest);
-}
-
+/* Global Scrollbar styling */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: 3px;
+  background: var(--border-subtle);
+  border-radius: 10px;
 }
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-muted);
-}
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }

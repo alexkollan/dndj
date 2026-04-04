@@ -1,171 +1,295 @@
-// audioEngine.js — Audio Engine (Howler.js)
-// All audio playback logic lives here. Zero UI code.
-// Components call these functions; they never touch Howler directly.
-//
-// Responsibilities:
-//   - Load / cache Howl instances per file path
-//   - Play, stop, and loop tracks
-//   - Adjust per-track and master volume
-//   - Crossfade between two tracks over a given duration
-
-import { Howl, Howler } from 'howler';
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-// Default fade duration in milliseconds when crossfading between tracks
-const DEFAULT_CROSSFADE_MS = 2000;
+import * as Tone from 'tone';
 
 // ─── Internal State ──────────────────────────────────────────────────────────
 
-// Cache of Howl instances keyed by the app:// URL string.
-// This prevents re-loading the same file repeatedly.
-const howlCache = {};
+const playersCache = {};
+const volumeNodes = {};
+const playQueue = {};
+const activeSoundIds = {};
+const pausedState = {};
+const trackStartOffsets = {};
+const trackDurationCache = {};
+const lastPlayCallTimes = {};
+
+// Event system for UI synchronization
+const eventListeners = new Set();
+
+function emit(event, data) {
+  eventListeners.forEach(listener => listener(event, data));
+}
+
+export function subscribe(listener) {
+  eventListeners.add(listener);
+  return () => eventListeners.delete(listener);
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/**
- * getHowl
- * Returns a cached Howl instance for the given URL, creating one if needed.
- * Uses html5: true by default to ensure better support for streaming large files
- * and custom Electron protocols (prevents "no sound" on initial load).
- *
- * @param {string} audioUrl - app:// URL for the track
- * @param {boolean} loop    - Whether the Howl should loop
- * @param {string} format   - Audio format (mp3, ogg, etc.)
- * @returns {Howl}
- */
-function getHowl(audioUrl, loop = false, format = 'mp3') {
-  if (!howlCache[audioUrl]) {
-    howlCache[audioUrl] = new Howl({
-      src: [audioUrl],
-      format: [format],
-      loop,
-      html5: true,   // Enabled for better streaming/protocol support
-      preload: true,
-      onplayerror: (id, error) => {
-        console.error('Playback error for', audioUrl, error);
-        // Attempt to recover if the context was suspended
-        Howler.unload();
+function volToDb(vol) {
+  if (vol <= 0) return -60; 
+  return 20 * Math.log10(Math.max(0.0001, vol));
+}
+
+async function ensureToneStarted() {
+  if (Tone.context.state !== 'running') {
+    await Tone.start();
+  }
+}
+
+function getPlayer(audioUrl, loop, onEnd) {
+  if (!playersCache[audioUrl]) {
+    const vol = new Tone.Volume(-60).toDestination();
+    volumeNodes[audioUrl] = vol;
+
+    const player = new Tone.Player({
+      url: audioUrl,
+      loop: loop,
+      onload: () => {
+        trackDurationCache[audioUrl] = player.buffer.duration;
+        if (playQueue[audioUrl]) {
+           playQueue[audioUrl]();
+           delete playQueue[audioUrl];
+        }
+      },
+      onstop: () => {
+         // Clean up internal state if stopped
+         if (player.state === 'stopped') {
+            const isActuallyPaused = !!pausedState[audioUrl];
+            if (!isActuallyPaused) {
+              delete activeSoundIds[audioUrl];
+              emit('trackEnded', { audioUrl });
+              if (player.onEndCallback) {
+                setTimeout(() => player.onEndCallback(), 10);
+              }
+            }
+         }
       }
-    });
+    }).connect(vol);
+    playersCache[audioUrl] = player;
   }
-  return howlCache[audioUrl];
+  return playersCache[audioUrl];
 }
 
-// ─── Public API ───────────────────────────────────────────────────────────────
+// ─── Public API ──────────────────────────────────────────────────────────────
 
-/**
- * playTrack
- * Starts playback of a single track. Ensures the track is not already playing
- * to prevent overlapping "cloned" sounds.
- *
- * @param {string}   audioUrl - app:// URL
- * @param {boolean}  loop     - Whether to loop
- * @param {number}   volume   - Initial volume 0..1
- * @param {string}   format   - Extension format
- * @param {function} onEnd    - Optional callback when sound finishes
- * @returns {Howl}
- */
-function playTrack(audioUrl, loop = false, volume = 1, format = 'mp3', onEnd = null) {
-  const howl = getHowl(audioUrl, loop, format);
-  howl.loop(loop);
-  howl.volume(volume);
-
-  // Update callbacks
-  if (onEnd) {
-    howl.off('end'); // Remove previous listeners
-    howl.on('end', onEnd);
+async function playTrack(audioUrl, loop = false, volume = 1, format = 'mp3', onEnd = null, startTime = 0, endTime = null) {
+  await ensureToneStarted();
+  const now = Date.now();
+  if (lastPlayCallTimes[audioUrl] && (now - lastPlayCallTimes[audioUrl] < 150)) {
+    return audioUrl;
   }
+  lastPlayCallTimes[audioUrl] = now;
 
-  // If already playing, don't start it again (prevents multiple overlapping instances)
-  if (!howl.playing()) {
-    howl.play();
+  const player = getPlayer(audioUrl, loop, onEnd);
+  player.onEndCallback = onEnd;
+
+  const performPlay = () => {
+    try {
+      player.stop();
+      const volNode = volumeNodes[audioUrl];
+      volNode.volume.value = volToDb(volume);
+
+      const fullDuration = player.buffer.duration || 0;
+      if (!fullDuration || fullDuration === Infinity) return;
+
+      const safeStartTime = Math.max(0, Math.min(startTime, fullDuration - 0.001));
+      let safeEndTime = endTime || fullDuration;
+      safeEndTime = Math.max(safeStartTime + 0.001, Math.min(safeEndTime, fullDuration));
+      
+      const durationSec = safeEndTime - safeStartTime;
+      const isCropped = safeStartTime > 0.001 || Math.abs(safeEndTime - fullDuration) > 0.01;
+
+      player.loopStart = safeStartTime;
+      player.loopEnd = safeEndTime;
+      player.loop = loop;
+
+      trackStartOffsets[audioUrl] = Tone.now() - safeStartTime;
+      
+      if (isCropped && !loop) {
+        player.start(0, safeStartTime, durationSec);
+      } else {
+        player.start(0, safeStartTime);
+      }
+      
+      activeSoundIds[audioUrl] = audioUrl;
+      pausedState[audioUrl] = false;
+      emit('trackStarted', { audioUrl });
+    } catch (err) {
+      console.error(`[audioEngine] Play error for ${audioUrl}:`, err);
+    }
+  };
+
+  if (player.loaded) {
+    performPlay();
+  } else {
+    playQueue[audioUrl] = performPlay;
   }
-  return howl;
+  
+  return audioUrl;
 }
 
-/**
- * stopTrack
- * Stops playback of a track immediately and unloads it from memory if needed.
- */
 function stopTrack(audioUrl) {
-  const howl = howlCache[audioUrl];
-  if (howl) {
-    howl.stop();
+  if (playQueue[audioUrl]) delete playQueue[audioUrl];
+  const player = playersCache[audioUrl];
+  if (player) {
+    player.stop();
+    pausedState[audioUrl] = false;
+    delete activeSoundIds[audioUrl];
+    emit('trackStopped', { audioUrl });
   }
 }
 
 /**
- * setTrackVolume
- * Adjusts the volume of a single track without affecting others.
- *
- * @param {string} audioUrl - app:// URL
- * @param {number} volume   - 0..1
+ * unloadTrack
+ * Completely removes the player and releases the file handle.
+ * Critical for renaming files on Windows.
  */
+function unloadTrack(audioUrl) {
+  const player = playersCache[audioUrl];
+  if (player) {
+    player.dispose(); // Releases buffer and Web Audio nodes
+    delete playersCache[audioUrl];
+    delete volumeNodes[audioUrl];
+    delete trackDurationCache[audioUrl];
+    delete activeSoundIds[audioUrl];
+    delete pausedState[audioUrl];
+  }
+}
+
 function setTrackVolume(audioUrl, volume) {
-  const howl = howlCache[audioUrl];
-  if (howl) {
-    howl.volume(Math.max(0, Math.min(1, volume)));
+  const volNode = volumeNodes[audioUrl];
+  if (volNode) {
+    volNode.volume.rampTo(volToDb(volume), 0.1);
   }
 }
 
-/**
- * setMasterVolume
- * Sets the global Howler volume. Affects all currently playing sounds.
- *
- * @param {number} volume - 0..1
- */
 function setMasterVolume(volume) {
-  Howler.volume(Math.max(0, Math.min(1, volume)));
+  Tone.Destination.volume.rampTo(volToDb(volume), 0.1);
 }
 
-/**
- * stopAll
- * Immediately stops every Howl instance that is currently playing.
- * Bound to the "Stop All" master control and the Space hotkey.
- */
 function stopAll() {
-  Howler.stop();
+  Object.keys(playersCache).forEach(url => {
+    playersCache[url].stop();
+    emit('trackStopped', { audioUrl: url });
+  });
+  Object.keys(playQueue).forEach(url => delete playQueue[url]);
+  Object.keys(pausedState).forEach(k => pausedState[k] = false);
+  Object.keys(activeSoundIds).forEach(k => delete activeSoundIds[k]);
 }
 
 /**
- * crossfade
- * Fades out the currently-playing track while fading in the next one.
- * Both tracks must already be loaded (i.e., their Howl instances exist).
- *
- * @param {string} fromUrl       - app:// URL of the outgoing track
- * @param {string} toUrl         - app:// URL of the incoming track
- * @param {number} [durationMs]  - Crossfade duration in milliseconds
- * @param {number} [targetVolume] - Target volume for the incoming track (0..1)
+ * transitionToScene
+ * Fades out all currently playing tracks that are NOT in the target list,
+ * and starts/fades in the new tracks.
  */
-function crossfade(fromUrl, toUrl, durationMs = DEFAULT_CROSSFADE_MS, targetVolume = 1) {
-  const outgoing = howlCache[fromUrl];
-  const incoming = getHowl(toUrl, true);
+function transitionToScene(sceneTracks, durationMs = 2000) {
+  const targetUrls = new Set(sceneTracks.map(t => t.url));
+  
+  // 1. Fade out current tracks not in scene
+  Object.keys(activeSoundIds).forEach(url => {
+    if (!targetUrls.has(url)) {
+      const volNode = volumeNodes[url];
+      if (volNode) {
+        volNode.volume.rampTo(-60, durationMs / 1000);
+        setTimeout(() => stopTrack(url), durationMs + 100);
+      }
+    }
+  });
 
-  // Start the incoming track silently, then fade it in
-  incoming.volume(0);
-  if (!incoming.playing()) {
-    incoming.play();
-  }
-  incoming.fade(0, targetVolume, durationMs);
-
-  // Fade out and stop the outgoing track
-  if (outgoing && outgoing.playing()) {
-    outgoing.fade(outgoing.volume(), 0, durationMs);
-    setTimeout(() => outgoing.stop(), durationMs);
-  }
+  // 2. Start and fade in scene tracks
+  sceneTracks.forEach(track => {
+    const isPlaying = activeSoundIds[track.url];
+    if (!isPlaying) {
+      playTrack(track.url, track.isLoop, 0, 'mp3', track.onEnd, track.startTime, track.endTime);
+      setTimeout(() => {
+        const volNode = volumeNodes[track.url];
+        if (volNode) volNode.volume.rampTo(volToDb(track.volume), durationMs / 1000);
+      }, 50);
+    } else {
+      // Already playing, just update volume
+      setTrackVolume(track.url, track.volume);
+    }
+  });
 }
 
-/**
- * isPlaying
- * Returns whether a given track is currently playing.
- *
- * @param {string} audioUrl - app:// URL
- * @returns {boolean}
- */
 function isPlaying(audioUrl) {
-  const howl = howlCache[audioUrl];
-  return howl ? howl.playing() : false;
+  const player = playersCache[audioUrl];
+  return player ? player.state === 'started' : false;
+}
+
+function pauseTrack(audioUrl) {
+  const player = playersCache[audioUrl];
+  if (player && player.state === 'started') {
+    const elapsed = Tone.now() - trackStartOffsets[audioUrl];
+    pausedState[audioUrl] = elapsed;
+    player.stop();
+    emit('trackPaused', { audioUrl });
+  }
+}
+
+function resumeTrack(audioUrl) {
+  const player = playersCache[audioUrl];
+  if (player && pausedState[audioUrl] !== undefined && pausedState[audioUrl] !== false) {
+    if (!player.loaded) {
+        playTrack(audioUrl, player.loop, 1, 'mp3', player.onEndCallback, pausedState[audioUrl]);
+        return;
+    }
+    const startAt = pausedState[audioUrl];
+    trackStartOffsets[audioUrl] = Tone.now() - startAt;
+    player.start(0, startAt);
+    pausedState[audioUrl] = false;
+    emit('trackResumed', { audioUrl });
+  }
+}
+
+function isPaused(audioUrl) {
+  return pausedState[audioUrl] !== undefined && pausedState[audioUrl] !== false;
+}
+
+function seekTrack(audioUrl, position) {
+  const player = playersCache[audioUrl];
+  if (player) {
+    const wasPlaying = player.state === 'started';
+    player.stop();
+    const dur = trackDurationCache[audioUrl] || player.buffer.duration || Infinity;
+    const safePos = Math.max(0, Math.min(position, dur - 0.001));
+    trackStartOffsets[audioUrl] = Tone.now() - safePos;
+    if (wasPlaying) {
+      if (player.loaded) player.start(0, safePos);
+      else playQueue[audioUrl] = () => player.start(0, safePos);
+    } else {
+      pausedState[audioUrl] = safePos;
+    }
+    emit('trackSeeked', { audioUrl, position: safePos });
+  }
+}
+
+function getPlaybackPosition(audioUrl) {
+  const player = playersCache[audioUrl];
+  if (player && player.state === 'started') {
+     let pos = Tone.now() - trackStartOffsets[audioUrl];
+     if (player.loop) {
+        const loopDur = player.loopEnd - player.loopStart;
+        if (loopDur > 0 && pos > player.loopStart) {
+           pos = ((pos - player.loopStart) % loopDur) + player.loopStart;
+        }
+     }
+     return pos;
+  } else if (pausedState[audioUrl] !== false && pausedState[audioUrl] !== undefined) {
+     return pausedState[audioUrl];
+  }
+  return 0;
+}
+
+function getDuration(audioUrl) {
+  return trackDurationCache[audioUrl] || 0;
+}
+
+function crossfade(fromUrl, toUrl, durationMs = 2000, targetVolume = 1) {
+  // Compatibility wrapper for AtmospherePlayer
+  transitionToScene([
+    { url: toUrl, volume: targetVolume, isLoop: true }
+  ], durationMs);
 }
 
 export {
@@ -174,6 +298,14 @@ export {
   setTrackVolume,
   setMasterVolume,
   stopAll,
+  transitionToScene,
   crossfade,
   isPlaying,
+  pauseTrack,
+  resumeTrack,
+  isPaused,
+  seekTrack,
+  getPlaybackPosition,
+  getDuration,
+  unloadTrack,
 };

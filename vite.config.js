@@ -11,7 +11,7 @@ export default defineConfig(({ command }) => ({
   base: command === 'build' ? './' : '/',
   server: {
     // Fixed port so main.js always knows where to load the renderer from in dev mode.
-    port: 5173,
+    port: 5178,
     strictPort: true,
   },
   build: {

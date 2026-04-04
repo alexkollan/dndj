@@ -1,21 +1,32 @@
-'use strict';
-
-// preload.js — Context Bridge
-// Exposes a minimal, safe IPC surface to the renderer process.
-// The renderer cannot access Node.js APIs directly; everything goes through
-// this bridge. Keep the surface area small — only expose what the UI needs.
-
 const { contextBridge, ipcRenderer } = require('electron');
 
-// The API object that the renderer can access as window.dndj
+/**
+ * contextBridge.exposeInMainWorld
+ * Securely exposes a limited set of Electron/IPC methods to the renderer process.
+ * All file-system and DB logic remains in the Main process.
+ */
 contextBridge.exposeInMainWorld('dndj', {
-  // Ask the main process to scan the /sounds folder and return categorised tracks.
-  // Returns a Promise that resolves with the library object: { category: [tracks] }
+  // Sound Library & Audio
   scanLibrary: () => ipcRenderer.invoke('scan-library'),
-
-  // Ask the main process to resolve a file path to a safe app:// URL that
-  // the renderer can pass to Howler.js for playback.
-  // filePath: absolute path string returned by scanLibrary
-  // Returns a Promise<string> with the playable URL.
   getAudioUrl: (filePath) => ipcRenderer.invoke('get-audio-url', filePath),
+
+  // Tagging
+  getTags: () => ipcRenderer.invoke('get-tags'),
+  addTagToTrack: (trackId, tagName) => ipcRenderer.invoke('add-tag-to-track', trackId, tagName),
+  removeTagFromTrack: (trackId, tagId) => ipcRenderer.invoke('remove-tag-from-track', trackId, tagId),
+
+  // Scenes
+  createEmptyScene: (name, description) => ipcRenderer.invoke('create-empty-scene', name, description),
+  addTrackToScene: (sceneId, trackId, volume, isLoop) => ipcRenderer.invoke('add-track-to-scene', sceneId, trackId, volume, isLoop),
+  removeTrackFromScene: (sceneId, trackId) => ipcRenderer.invoke('remove-track-from-scene', sceneId, trackId),
+  updateSceneTrackSettings: (sceneId, trackId, volume, isLoop, startTime, endTime) => ipcRenderer.invoke('update-scene-track-settings', sceneId, trackId, volume, isLoop, startTime, endTime),
+  saveScene: (name, description, tracks) => ipcRenderer.invoke('save-scene', name, description, tracks),
+  getScenes: () => ipcRenderer.invoke('get-scenes'),
+  getSceneTracks: (sceneId) => ipcRenderer.invoke('get-scene-tracks', sceneId),
+  updateTrackPeaks: (trackId, peaks) => ipcRenderer.invoke('update-track-peaks', trackId, peaks),
+  renameTrack: (trackId, newName) => ipcRenderer.invoke('rename-track', trackId, newName),
+
+  // Settings (Persistent state like volumes, layout)
+  getSetting: (key) => ipcRenderer.invoke('get-setting', key),
+  setSetting: (key, value) => ipcRenderer.invoke('set-setting', key, value),
 });

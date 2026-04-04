@@ -1,67 +1,83 @@
 // App.jsx — Root Component
-// Handles top-level layout and state wiring:
-//   - Fetches the sound library via IPC on mount
-//   - Tracks the selected category
-//   - Wires master volume to the audio engine
-//   - Renders the sidebar, main panel (atmosphere or soundboard), and controls
-
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import CategorySidebar from './components/CategorySidebar.jsx';
 import AtmospherePlayer from './components/AtmospherePlayer.jsx';
 import Soundboard from './components/Soundboard.jsx';
 import MasterControls from './components/MasterControls.jsx';
-import { setMasterVolume, stopAll, setTrackVolume } from './audioEngine.js';
-import { loadSettings, saveSettings } from './settingsManager.js';
+import SceneList from './components/SceneList.jsx';
+import { setMasterVolume, stopAll, setTrackVolume, subscribe } from './audioEngine.js';
 
-// Default layout sizes
-const DEFAULT_SIDEBAR_WIDTH = 180;
-const DEFAULT_CONTROLS_WIDTH = 280;
+// Styles
+import './styles/global.css';
+import './styles/components/MainLayout.css';
 
-// SFX category is handled by Soundboard, not AtmospherePlayer
+const DEFAULT_SIDEBAR_WIDTH = 240;
+const DEFAULT_CONTROLS_WIDTH = 300;
 const SFX_CATEGORY = 'sfx';
+const SCENES_CATEGORY = 'scenes';
 
-/**
- * App
- * Root component. Mounts once and manages global state.
- */
 function App() {
-  // Load settings from storage or defaults
-  const [settings, setSettingsState] = useState(loadSettings());
+  const [allTracks, setAllTracks] = useState([]);
+  const [tags, setTags] = useState([]);
+  const [scenes, setScenes] = useState([]);
+  const [settings, setSettingsState] = useState({
+    masterVolume: 0.8,
+    categories: {},
+    layout: { sidebarWidth: DEFAULT_SIDEBAR_WIDTH, controlsWidth: DEFAULT_CONTROLS_WIDTH }
+  });
 
-  // Layout state
-  const [sidebarWidth, setSidebarWidth] = useState(settings.layout?.sidebarWidth || DEFAULT_SIDEBAR_WIDTH);
-  const [controlsWidth, setControlsWidth] = useState(settings.layout?.controlsWidth || DEFAULT_CONTROLS_WIDTH);
-  const appRef = React.useRef(null);
-
-  // The full sound library returned by libraryScanner: { [category]: [tracks] }
-  const [library, setLibrary] = useState({});
-
-  // Sorted list of category keys for the sidebar
-  const [categories, setCategories] = useState([]);
-
-  // The category currently displayed in the main panel
   const [selectedCategory, setSelectedCategory] = useState('');
-
-  // Global master volume (0..1)
-  const [masterVolume, setMasterVolumeState] = useState(settings.masterVolume);
-
-  // Loading state for the initial library scan
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTags, setSelectedTags] = useState([]);
+  const [masterVolume, setMasterVolumeState] = useState(0.8);
+  const [playingUrls, setPlayingUrls] = useState(new Set());
+  const [pausedUrls, setPausedUrls] = useState(new Set());
+  const [urlCache, setUrlCache] = useState({});
   const [loading, setLoading] = useState(true);
-
-  // Error message if scanning fails
   const [error, setError] = useState(null);
 
-  // Track which URLs are currently playing: Set<string>
-  const [playingUrls, setPlayingUrls] = useState(new Set());
+  const appRef = React.useRef(null);
 
-  // Cache of resolved URLs to avoid repeated IPC round-trips: { [filePath]: url }
-  const [urlCache, setUrlCache] = useState({});
+  useEffect(() => {
+    const unsubscribe = subscribe((event, data) => {
+      if (event === 'trackStarted' || event === 'trackResumed') {
+        setPlayingUrls(prev => {
+          if (prev.has(data.audioUrl)) return prev;
+          const next = new Set(prev);
+          next.add(data.audioUrl);
+          return next;
+        });
+        setPausedUrls(prev => {
+          if (!prev.has(data.audioUrl)) return prev;
+          const next = new Set(prev);
+          next.delete(data.audioUrl);
+          return next;
+        });
+      } else if (event === 'trackEnded' || event === 'trackStopped') {
+        setPlayingUrls(prev => {
+          if (!prev.has(data.audioUrl)) return prev;
+          const next = new Set(prev);
+          next.delete(data.audioUrl);
+          return next;
+        });
+        setPausedUrls(prev => {
+          if (!prev.has(data.audioUrl)) return prev;
+          const next = new Set(prev);
+          next.delete(data.audioUrl);
+          return next;
+        });
+      } else if (event === 'trackPaused') {
+        setPausedUrls(prev => {
+          if (prev.has(data.audioUrl)) return prev;
+          const next = new Set(prev);
+          next.add(data.audioUrl);
+          return next;
+        });
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
-  /**
-   * resolveUrl
-   * Converts a file path to an app:// URL, using the local cache to avoid
-   * repeated IPC calls for the same file.
-   */
   const resolveUrl = useCallback(async (filePath) => {
     if (urlCache[filePath]) return urlCache[filePath];
     const resolvedUrl = await window.dndj.getAudioUrl(filePath);
@@ -69,186 +85,214 @@ function App() {
     return resolvedUrl;
   }, [urlCache]);
 
-  /**
-   * updateSettings
-   * Helper to update part of the settings object and persist to storage.
-   */
-  const updateSettings = useCallback((updates) => {
+  const updateSettings = useCallback(async (updates) => {
     setSettingsState((prev) => {
       const next = { ...prev, ...updates };
-      saveSettings(next);
+      window.dndj.setSetting('user_settings', next);
       return next;
     });
   }, []);
 
-  /**
-   * updateCategorySetting
-   * Helper to update specific category's volume or EQ and persist.
-   */
   const updateCategorySetting = useCallback((categoryName, settingKey, value) => {
     setSettingsState((prev) => {
-      const catSettings = prev.categories[categoryName] || { volume: 1, eq: { bass: 0, mid: 0, high: 0 } };
+      const catSettings = prev.categories[categoryName] || { volume: 1 };
       const nextCatSettings = { ...catSettings, [settingKey]: value };
       const next = {
         ...prev,
         categories: { ...prev.categories, [categoryName]: nextCatSettings }
       };
-      saveSettings(next);
+      window.dndj.setSetting('user_settings', next);
       return next;
     });
   }, []);
 
-  // ── Layout Persistence & Sync ─────────────────────────────────────────────
   useEffect(() => {
-    if (appRef.current) {
-      appRef.current.style.setProperty('--sidebar-width', `${sidebarWidth}px`);
-      appRef.current.style.setProperty('--controls-width', `${controlsWidth}px`);
-    }
-    // Debounced save of layout
-    const timer = setTimeout(() => {
-      updateSettings({ layout: { sidebarWidth, controlsWidth } });
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [sidebarWidth, controlsWidth, updateSettings]);
-
-  // ── Resizing Handlers ─────────────────────────────────────────────────────
-  const startResizing = useCallback((type) => (e) => {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startWidth = type === 'sidebar' ? sidebarWidth : controlsWidth;
-
-    const onMouseMove = (moveEvent) => {
-      const delta = moveEvent.clientX - startX;
-      if (type === 'sidebar') {
-        setSidebarWidth(Math.max(140, Math.min(400, startWidth + delta)));
-      } else {
-        setControlsWidth(Math.max(180, Math.min(500, startWidth - delta)));
-      }
-    };
-
-    const onMouseUp = () => {
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-      document.body.style.cursor = 'default';
-    };
-
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-    document.body.style.cursor = 'col-resize';
-  }, [sidebarWidth, controlsWidth]);
-
-  // ── Load sound library on mount ───────────────────────────────────────────
-  useEffect(() => {
-    async function loadLibrary() {
+    async function init() {
       try {
-        // window.dndj is exposed by preload.js via the context bridge
-        const result = await window.dndj.scanLibrary();
-        const cats = Object.keys(result).sort();
-        setLibrary(result);
-        setCategories(cats);
-        // Default to the first category, preferring 'atmosphere' if available
-        setSelectedCategory(cats.includes('atmosphere') ? 'atmosphere' : (cats[0] ?? ''));
+        const storedSettings = await window.dndj.getSetting('user_settings');
+        if (storedSettings) {
+          setSettingsState(storedSettings);
+          setMasterVolumeState(storedSettings.masterVolume);
+        }
+        const tracks = await window.dndj.scanLibrary();
+        const loadedTags = await window.dndj.getTags();
+        const loadedScenes = await window.dndj.getScenes();
+        setAllTracks(tracks);
+        setTags(loadedTags);
+        setScenes(loadedScenes);
+        const cats = [...new Set(tracks.map(t => t.category))].sort();
+        if (cats.length > 0) {
+          setSelectedCategory(cats.includes('atmosphere') ? 'atmosphere' : cats[0]);
+        }
       } catch (err) {
-        setError(`Failed to load sound library: ${err.message}`);
+        setError(`Initialization failed: ${err.message}`);
       } finally {
         setLoading(false);
       }
     }
-    loadLibrary();
+    init();
   }, []);
 
-  // ── Apply initial master volume ───────────────────────────────────────────
-  useEffect(() => {
-    setMasterVolume(settings.masterVolume);
-  }, [settings.masterVolume]);
+  const library = useMemo(() => {
+    const lib = {};
+    allTracks.forEach(track => {
+      if (!lib[track.category]) lib[track.category] = [];
+      lib[track.category].push(track);
+    });
+    return lib;
+  }, [allTracks]);
 
-  // ── Master volume handler ─────────────────────────────────────────────────
+  const categories = useMemo(() => Object.keys(library).sort(), [library]);
+
+  const filteredTracks = useMemo(() => {
+    return allTracks.filter(track => {
+      const matchesSearch = track.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const trackTags = (track.tags || '').split(',').filter(Boolean);
+      const matchesTags = selectedTags.length === 0 || selectedTags.every(tag => trackTags.includes(tag));
+      return matchesSearch && matchesTags;
+    });
+  }, [allTracks, searchQuery, selectedTags]);
+
   const handleMasterVolume = useCallback((vol) => {
     setMasterVolumeState(vol);
     setMasterVolume(vol);
     updateSettings({ masterVolume: vol });
   }, [updateSettings]);
 
-  // ── Stop All handler ──────────────────────────────────────────────────────
   const handleStopAll = useCallback(() => {
     stopAll();
-    setPlayingUrls(new Set()); // Clear UI state for all playing tracks
+    setPlayingUrls(new Set());
+    setPausedUrls(new Set());
   }, []);
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  const handleCreateEmptyScene = useCallback(async (name) => {
+    if (!name) return;
+    const updatedScenes = await window.dndj.createEmptyScene(name, '');
+    setScenes(updatedScenes);
+  }, []);
 
-  if (loading) {
-    return (
-      <div className="app app--loading">
-        <p>Scanning sound library…</p>
-      </div>
+  const handleAddToScene = useCallback(async (trackId, sceneId, newSceneName) => {
+    let targetSceneId = sceneId;
+    if (!targetSceneId && newSceneName) {
+      const updatedScenes = await window.dndj.createEmptyScene(newSceneName, '');
+      setScenes(updatedScenes);
+      const newScene = updatedScenes.find(s => s.name === newSceneName);
+      if (newScene) targetSceneId = newScene.id;
+    }
+
+    if (targetSceneId) {
+      await window.dndj.addTrackToScene(targetSceneId, trackId, 1.0, 1);
+    }
+  }, []);
+
+  const handleRenameTrack = useCallback(async (trackId, newName) => {
+    try {
+      const updatedTracks = await window.dndj.renameTrack(trackId, newName);
+      setAllTracks(updatedTracks);
+      const loadedScenes = await window.dndj.getScenes();
+      setScenes(loadedScenes);
+    } catch (err) {
+      alert(`Rename failed: ${err.message}`);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (appRef.current) {
+      appRef.current.style.setProperty('--sidebar-width', `${settings.layout.sidebarWidth}px`);
+      appRef.current.style.setProperty('--controls-width', `${settings.layout.controlsWidth}px`);
+    }
+  }, [settings.layout]);
+
+  const startResizing = useCallback((type) => (e) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = type === 'sidebar' ? settings.layout.sidebarWidth : settings.layout.controlsWidth;
+    const onMouseMove = (moveEvent) => {
+      const delta = moveEvent.clientX - startX;
+      if (type === 'sidebar') {
+        const newWidth = Math.max(160, Math.min(400, startWidth + delta));
+        updateSettings({ layout: { ...settings.layout, sidebarWidth: newWidth } });
+      } else {
+        const newWidth = Math.max(200, Math.min(600, startWidth - delta));
+        updateSettings({ layout: { ...settings.layout, controlsWidth: newWidth } });
+      }
+    };
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, [settings.layout, updateSettings]);
+
+  if (loading) return <div className="app-container"><p>Scanning...</p></div>;
+  if (error) return <div className="app-container"><p>{error}</p></div>;
+
+  let mainContent;
+  if (selectedCategory === SCENES_CATEGORY) {
+    mainContent = <SceneList scenes={scenes} resolveUrl={resolveUrl} onPlayingUrlsChange={setPlayingUrls} playingUrls={playingUrls} onAddTag={async (id, tag) => {
+      const t = await window.dndj.addTagToTrack(id, tag);
+      setAllTracks(t);
+      setTags(await window.dndj.getTags());
+    }} onRename={handleRenameTrack} />;
+  } else if (selectedCategory === SFX_CATEGORY) {
+    mainContent = <Soundboard library={library} filteredTracks={filteredTracks} resolveUrl={resolveUrl} urlCache={urlCache} playingUrls={playingUrls} pausedUrls={pausedUrls} onPlayingUrlsChange={setPlayingUrls} scenes={scenes} onAddToScene={handleAddToScene} onRename={handleRenameTrack} />;
+  } else {
+    mainContent = (
+      <AtmospherePlayer
+        library={library}
+        filteredTracks={filteredTracks}
+        category={selectedCategory}
+        resolveUrl={resolveUrl}
+        urlCache={urlCache}
+        playingUrls={playingUrls}
+        pausedUrls={pausedUrls}
+        onPlayingUrlsChange={setPlayingUrls}
+        categorySettings={settings.categories[selectedCategory]}
+        scenes={scenes}
+        onAddToScene={handleAddToScene}
+        onRename={handleRenameTrack}
+        onAddTag={async (id, tag) => {
+          const t = await window.dndj.addTagToTrack(id, tag);
+          setAllTracks(t);
+          setTags(await window.dndj.getTags());
+        }}
+      />
     );
   }
-
-  if (error) {
-    return (
-      <div className="app app--error">
-        <p>{error}</p>
-      </div>
-    );
-  }
-
-  // Determine which main panel to show
-  const showSoundboard = selectedCategory === SFX_CATEGORY;
 
   return (
-    <div className="app" ref={appRef}>
-      {/* Left: category navigation sidebar */}
-      <CategorySidebar
-        categories={categories}
-        selectedCategory={selectedCategory}
-        onSelect={setSelectedCategory}
-      />
-
-      {/* Resizer Sidebar/Main */}
-      <div className="app__resizer" onMouseDown={startResizing('sidebar')} />
-
-      {/* Centre: atmosphere player or soundboard depending on selected category */}
-      <main className="app__main">
-        <h1 className="app__panel-title">
-          {selectedCategory
-            ? selectedCategory.replace(/\b\w/g, (c) => c.toUpperCase())
-            : 'DNDj'}
-        </h1>
-
-        {showSoundboard ? (
-          <Soundboard
-            library={library}
-            resolveUrl={resolveUrl}
-            urlCache={urlCache}
-            playingUrls={playingUrls}
-            onPlayingUrlsChange={setPlayingUrls}
-          />
-        ) : (
-          <AtmospherePlayer
-            library={library}
-            category={selectedCategory}
-            resolveUrl={resolveUrl}
-            urlCache={urlCache}
-            playingUrls={playingUrls}
-            onPlayingUrlsChange={setPlayingUrls}
-            categorySettings={settings.categories[selectedCategory]}
-          />
-        )}
+    <div className="app-container" ref={appRef}>
+      <CategorySidebar categories={categories} selectedCategory={selectedCategory} onSelect={setSelectedCategory} />
+      <div className="resizer" onMouseDown={startResizing('sidebar')} />
+      <main className="main-content">
+        <header className="main-header">
+          <h1 className="panel-title">{selectedCategory?.toUpperCase() || 'DNDJ'}</h1>
+          {selectedCategory !== SCENES_CATEGORY && (
+            <div className="search-filter">
+              <input type="text" placeholder="Search tracks..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="search-input" />
+              <div className="tag-list">
+                {tags.map(tag => (
+                  <button key={tag.id} className={`tag-btn ${selectedTags.includes(tag.name) ? 'tag-btn--active' : ''}`} onClick={() => setSelectedTags(prev => prev.includes(tag.name) ? prev.filter(t => t !== tag.name) : [...prev, tag.name])}>
+                    {tag.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </header>
+        {mainContent}
       </main>
-
-      {/* Resizer Main/Controls */}
-      <div className="app__resizer" onMouseDown={startResizing('controls')} />
-
-      {/* Right: master volume and stop-all controls */}
-      <aside className="app__controls">
-        <MasterControls
-          masterVolume={masterVolume}
-          onMasterVolume={handleMasterVolume}
-          onStopAll={handleStopAll}
-          categories={categories}
-          categorySettings={settings.categories}
-          onCategoryChange={updateCategorySetting}
+      <div className="resizer" onMouseDown={startResizing('controls')} />
+      <aside className="controls-panel">
+        <MasterControls 
+          masterVolume={masterVolume} 
+          onMasterVolume={handleMasterVolume} 
+          onStopAll={handleStopAll} 
+          onCreateEmptyScene={handleCreateEmptyScene} 
+          categories={categories} 
+          categorySettings={settings.categories} 
+          onCategoryChange={updateCategorySetting} 
         />
       </aside>
     </div>
