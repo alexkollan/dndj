@@ -209,7 +209,7 @@
 .studio__deck {
   display: flex;
   flex-direction: column;
-  gap: var(--s-2);
+  height: var(--studio-deck-height);
 }
 
 .studio__crossfader-zone {

@@ -1,0 +1,38 @@
+/* DeckWaveform.css */
+
+.deck-wf {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 48px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-sunken);
+}
+
+.deck-wf__static,
+.deck-wf__overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.deck-wf__overlay {
+  cursor: crosshair;
+}
+
+.deck-wf__empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+  text-align: center;
+  padding: var(--s-4);
+  pointer-events: none;
+  font-style: italic;
+}

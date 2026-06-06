@@ -286,15 +286,62 @@
 }
 
 /* Duration */
+.tr-dur-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 var(--s-3) 0 var(--s-2);
+}
+
 .tr-dur {
   font-size: var(--text-xs);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   font-weight: var(--weight-semibold);
   text-align: right;
-  padding: 0 var(--s-3) 0 var(--s-2);
   white-space: nowrap;
+  transition: opacity var(--t-fast);
 }
+
+.tr:hover .tr-dur { opacity: 0; }
+
+/* Deck load buttons — shown on row hover */
+.tr-deck-btns {
+  display: none;
+  position: absolute;
+  right: 0;
+  gap: 2px;
+  align-items: center;
+}
+
+.tr:hover .tr-deck-btns { display: flex; }
+
+.tr-deck-btn {
+  font-size: 9px;
+  font-weight: var(--weight-black);
+  padding: 2px 5px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  line-height: 1;
+  letter-spacing: 0.05em;
+  transition: filter var(--t-fast);
+}
+
+.tr-deck-btn--a {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: var(--deck-a-color);
+  color: var(--deck-a-color);
+}
+
+.tr-deck-btn--b {
+  background: rgba(245, 158, 11, 0.18);
+  border-color: var(--deck-b-color);
+  color: var(--deck-b-color);
+}
+
+.tr-deck-btn:hover { filter: brightness(1.2); }
 
 /* ── Empty state ── */
 .tl-empty {

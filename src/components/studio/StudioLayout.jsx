@@ -5,9 +5,14 @@ import {
 } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import { useUIStore } from '../../store.js';
+import { loadDeck, subscribe } from '../../audioEngine.js';
 import PlaylistRail, { evaluateSmartPlaylist } from './PlaylistRail.jsx';
 import TracklistPanel from './TracklistPanel.jsx';
+import DeckPanel from './DeckPanel.jsx';
+import Crossfader from './Crossfader.jsx';
 import '../../styles/studio/StudioLayout.css';
+
+const INIT_DECK_STATE = { isPlaying: false, isPaused: false };
 
 function StudioLayout({
   masterVolume, onMasterVolume, onStopAll,
@@ -19,13 +24,33 @@ function StudioLayout({
   const railStartW = useRef(0);
 
   const [playlists, setPlaylists] = useState([]);
-  const [selectedPlaylistId, setSelectedPlaylistId] = useState(null); // null = My Library
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState(null);
   const [playlistTracks, setPlaylistTracks] = useState([]);
-  const [activeDrag, setActiveDrag] = useState(null); // { id, name }
+  const [activeDrag, setActiveDrag] = useState(null);
+
+  // Deck state
+  const [deckTracks, setDeckTracks] = useState({ A: null, B: null }); // { track, url } | null
+  const [deckState, setDeckState] = useState({ A: INIT_DECK_STATE, B: INIT_DECK_STATE });
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
+
+  // ── Subscribe to deck engine events ────────────────────────────────────────
+  useEffect(() => {
+    const unsub = subscribe((event, data) => {
+      const id = data?.deckId;
+      if (!id) return;
+      if (event === 'deckStarted') {
+        setDeckState(prev => ({ ...prev, [id]: { isPlaying: true, isPaused: false } }));
+      } else if (event === 'deckPaused') {
+        setDeckState(prev => ({ ...prev, [id]: { isPlaying: false, isPaused: true } }));
+      } else if (event === 'deckStopped' || event === 'deckEnded') {
+        setDeckState(prev => ({ ...prev, [id]: { isPlaying: false, isPaused: false } }));
+      }
+    });
+    return () => unsub();
+  }, []);
 
   // ── Load playlists ──────────────────────────────────────────────────────────
   const loadPlaylists = useCallback(async () => {
@@ -64,6 +89,15 @@ function StudioLayout({
     return pl?.type === 'manual';
   }, [selectedPlaylistId, playlists]);
 
+  // ── Load track to deck ──────────────────────────────────────────────────────
+  const handleLoadToDeck = useCallback(async (deckId, track) => {
+    const url = urlCache[track.path] || await resolveUrl(track.path);
+    if (!url) return;
+    setDeckTracks(prev => ({ ...prev, [deckId]: { track, url } }));
+    setDeckState(prev => ({ ...prev, [deckId]: INIT_DECK_STATE }));
+    await loadDeck(deckId, url);
+  }, [urlCache, resolveUrl]);
+
   // ── Rail resize ─────────────────────────────────────────────────────────────
   const startRailResize = useCallback((e) => {
     e.preventDefault();
@@ -93,17 +127,19 @@ function StudioLayout({
     if (!over) return;
 
     const overId = String(over.id);
+    const trackId = active.data.current?.trackId;
 
-    if (overId.startsWith('playlist-')) {
-      // Dropped on a playlist item → add track to that playlist
-      const trackId = active.data.current?.trackId;
+    if (overId === 'deck-A' || overId === 'deck-B') {
+      const deckId = overId === 'deck-A' ? 'A' : 'B';
+      const track = allTracks.find(t => t.id === trackId);
+      if (track) await handleLoadToDeck(deckId, track);
+    } else if (overId.startsWith('playlist-')) {
       const playlistId = parseInt(overId.replace('playlist-', ''), 10);
       if (trackId && playlistId) {
         await window.dndj.addTrackToPlaylist(playlistId, trackId);
         if (selectedPlaylistId === playlistId) await loadPlaylistTracks(playlistId);
       }
     } else if (isReorderable && typeof active.id === 'number' && typeof over.id === 'number' && active.id !== over.id) {
-      // Reorder within a manual playlist
       const oldIdx = playlistTracks.findIndex(t => t.id === active.id);
       const newIdx = playlistTracks.findIndex(t => t.id === over.id);
       if (oldIdx !== -1 && newIdx !== -1) {
@@ -114,7 +150,7 @@ function StudioLayout({
         }
       }
     }
-  }, [selectedPlaylistId, isReorderable, playlistTracks, loadPlaylistTracks]);
+  }, [selectedPlaylistId, isReorderable, playlistTracks, loadPlaylistTracks, allTracks, handleLoadToDeck]);
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
@@ -166,25 +202,30 @@ function StudioLayout({
 
             {/* Deck zone */}
             <div className="studio__decks">
-              <div className="studio__deck studio__deck--a">
-                <span className="studio__section-label studio__section-label--a">DECK A</span>
-                <div className="studio__placeholder-block studio__placeholder-block--deck">
-                  Deck A — Phase 3
-                </div>
+              <div className="studio__deck studio__deck--a deck--a">
+                <DeckPanel
+                  deckId="A"
+                  track={deckTracks.A?.track ?? null}
+                  isPlaying={deckState.A.isPlaying}
+                  isPaused={deckState.A.isPaused}
+                />
               </div>
+
               <div className="studio__crossfader-zone">
-                <span className="studio__section-label">CROSSFADE</span>
-                <div className="studio__placeholder-block">⟵ ━━●━━ ⟶ — Phase 3</div>
+                <Crossfader />
               </div>
-              <div className="studio__deck studio__deck--b">
-                <span className="studio__section-label studio__section-label--b">DECK B</span>
-                <div className="studio__placeholder-block studio__placeholder-block--deck">
-                  Deck B — Phase 3
-                </div>
+
+              <div className="studio__deck studio__deck--b deck--b">
+                <DeckPanel
+                  deckId="B"
+                  track={deckTracks.B?.track ?? null}
+                  isPlaying={deckState.B.isPlaying}
+                  isPaused={deckState.B.isPaused}
+                />
               </div>
             </div>
 
-            {/* Tracklist — Phase 2 */}
+            {/* Tracklist */}
             <div className="studio__tracklist">
               <TracklistPanel
                 tracks={displayedTracks}
@@ -194,6 +235,7 @@ function StudioLayout({
                 resolveUrl={resolveUrl}
                 selectedPlaylistId={selectedPlaylistId}
                 isReorderable={isReorderable}
+                onLoadToDeck={handleLoadToDeck}
               />
             </div>
 

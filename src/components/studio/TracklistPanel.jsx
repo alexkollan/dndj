@@ -21,7 +21,7 @@ function formatDur(sec) {
 }
 
 // ─── Shared row inner content ─────────────────────────────────────────────────
-function RowInner({ track, isPlaying, onPlayToggle }) {
+function RowInner({ track, isPlaying, onPlayToggle, onLoadToDeck }) {
   const catColor = CAT_COLORS[track.category?.toLowerCase()] || 'var(--text-muted)';
   const tags = (track.tags || '').split(',').map(t => t.trim()).filter(Boolean);
   return (
@@ -39,13 +39,29 @@ function RowInner({ track, isPlaying, onPlayToggle }) {
         {tags.slice(0, 3).map(t => <span key={t} className="tr-tag">{t}</span>)}
         {tags.length > 3 && <span className="tr-tag tr-tag--more">+{tags.length - 3}</span>}
       </div>
-      <span className="tr-dur">{formatDur(track.duration)}</span>
+      <div className="tr-dur-group">
+        <span className="tr-dur">{formatDur(track.duration)}</span>
+        {onLoadToDeck && (
+          <div className="tr-deck-btns">
+            <button
+              className="tr-deck-btn tr-deck-btn--a"
+              onClick={e => { e.stopPropagation(); onLoadToDeck('A', track); }}
+              title="Load to Deck A"
+            >A</button>
+            <button
+              className="tr-deck-btn tr-deck-btn--b"
+              onClick={e => { e.stopPropagation(); onLoadToDeck('B', track); }}
+              title="Load to Deck B"
+            >B</button>
+          </div>
+        )}
+      </div>
     </>
   );
 }
 
 // ─── Draggable row (library view) ─────────────────────────────────────────────
-function DraggableRow({ track, isPlaying, onPlayToggle }) {
+function DraggableRow({ track, isPlaying, onPlayToggle, onLoadToDeck }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `track-${track.id}`,
     data: { trackId: track.id, trackName: track.name },
@@ -55,14 +71,14 @@ function DraggableRow({ track, isPlaying, onPlayToggle }) {
       ref={setNodeRef}
       className={`tr ${isPlaying ? 'tr--playing' : ''} ${isDragging ? 'tr--dragging' : ''}`}
     >
-      <span className="tr-drag" {...listeners} {...attributes} title="Drag to a playlist">⣿</span>
-      <RowInner track={track} isPlaying={isPlaying} onPlayToggle={onPlayToggle} />
+      <span className="tr-drag" {...listeners} {...attributes} title="Drag to a playlist or deck">⣿</span>
+      <RowInner track={track} isPlaying={isPlaying} onPlayToggle={onPlayToggle} onLoadToDeck={onLoadToDeck} />
     </div>
   );
 }
 
 // ─── Sortable row (playlist view) ─────────────────────────────────────────────
-function SortableRow({ track, isPlaying, onPlayToggle }) {
+function SortableRow({ track, isPlaying, onPlayToggle, onLoadToDeck }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: track.id });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -76,7 +92,7 @@ function SortableRow({ track, isPlaying, onPlayToggle }) {
       className={`tr ${isPlaying ? 'tr--playing' : ''} ${isDragging ? 'tr--dragging' : ''}`}
     >
       <span className="tr-drag" {...listeners} {...attributes} title="Drag to reorder">⣿</span>
-      <RowInner track={track} isPlaying={isPlaying} onPlayToggle={onPlayToggle} />
+      <RowInner track={track} isPlaying={isPlaying} onPlayToggle={onPlayToggle} onLoadToDeck={onLoadToDeck} />
     </div>
   );
 }
@@ -92,7 +108,7 @@ function SortHeader({ label, field, sortField, sortDir, onSort }) {
 }
 
 // ─── TracklistPanel ───────────────────────────────────────────────────────────
-function TracklistPanel({ tracks, allTracks, tags, urlCache, resolveUrl, selectedPlaylistId, isReorderable }) {
+function TracklistPanel({ tracks, allTracks, tags, urlCache, resolveUrl, selectedPlaylistId, isReorderable, onLoadToDeck }) {
   const { playingUrls } = useAudioStore();
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState('');
@@ -219,6 +235,7 @@ function TracklistPanel({ tracks, allTracks, tags, urlCache, resolveUrl, selecte
                 track={track}
                 isPlaying={isTrackPlaying(track)}
                 onPlayToggle={() => handlePlayToggle(track)}
+                onLoadToDeck={onLoadToDeck}
               />
             ))}
           </SortableContext>
@@ -229,6 +246,7 @@ function TracklistPanel({ tracks, allTracks, tags, urlCache, resolveUrl, selecte
               track={track}
               isPlaying={isTrackPlaying(track)}
               onPlayToggle={() => handlePlayToggle(track)}
+              onLoadToDeck={onLoadToDeck}
             />
           ))
         )}
