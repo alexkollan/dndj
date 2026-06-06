@@ -44,6 +44,13 @@ function DeckPanel({ deckId, track, isPlaying, isPaused }) {
         setDuration(0);
       }
       if (event === 'deckStopped') setCurrentTime(0);
+      if (event === 'deckMixerReset') {
+        setVolume(data.volume ?? 0.8);
+        setFilterFreq(data.filterFreq ?? 20000);
+        setLoopEnabled(data.loopEnabled ?? true);
+        setLoopStart(data.loopStart ?? 0);
+        setLoopEnd(data.loopEnd ?? null);
+      }
     });
     return () => unsub();
   }, [deckId]);

@@ -41,6 +41,11 @@ contextBridge.exposeInMainWorld('dndj', {
   removeTrackFromPlaylist: (playlistId, trackId) => ipcRenderer.invoke('remove-track-from-playlist', playlistId, trackId),
   reorderPlaylistTrack: (playlistId, trackId, sortOrder) => ipcRenderer.invoke('reorder-playlist-track', playlistId, trackId, sortOrder),
 
+  // Studio scene snapshots
+  saveSceneSnapshot: (name, snapshotJson) => ipcRenderer.invoke('save-scene-snapshot', name, snapshotJson),
+  updateSceneSnapshot: (id, name, snapshotJson) => ipcRenderer.invoke('update-scene-snapshot', id, name, snapshotJson),
+  deleteScene: (id) => ipcRenderer.invoke('delete-scene', id),
+
   // Cue Points
   getCuePoints: (trackId) => ipcRenderer.invoke('get-cue-points', trackId),
   addCuePoint: (trackId, position, label, color) => ipcRenderer.invoke('add-cue-point', trackId, position, label, color),

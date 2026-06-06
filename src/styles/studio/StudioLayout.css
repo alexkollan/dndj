@@ -170,8 +170,36 @@
   display: flex;
   flex-direction: column;
   padding: var(--s-4);
-  overflow-y: auto;
+  overflow: hidden;
   flex-shrink: 0;
+  gap: 0;
+}
+
+/* Top section: playlists — takes remaining space */
+.studio__rail-top {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Divider between playlists and scenes */
+.studio__rail-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: var(--s-3) 0;
+  flex-shrink: 0;
+}
+
+/* Bottom section: scenes — fixed height */
+.studio__rail-bottom {
+  flex: 0 0 auto;
+  min-height: 80px;
+  max-height: 220px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .studio__rail-resizer {

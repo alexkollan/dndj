@@ -139,6 +139,11 @@ if (!tableInfo.some(col => col.name === 'end_time')) {
   db.exec("ALTER TABLE scene_tracks ADD COLUMN end_time REAL");
 }
 
+const scenesInfo = db.prepare("PRAGMA table_info(scenes)").all();
+if (!scenesInfo.some(col => col.name === 'snapshot_json')) {
+  db.exec("ALTER TABLE scenes ADD COLUMN snapshot_json TEXT");
+}
+
 // ─── Track Operations ────────────────────────────────────────────────────────
 
 const upsertTrack = db.prepare(`
@@ -183,6 +188,9 @@ const getAllTags = db.prepare(`SELECT * FROM tags ORDER BY name ASC`);
 // ─── Scene Operations ─────────────────────────────────────────────────────────
 
 const insertScene = db.prepare(`INSERT INTO scenes (name, description) VALUES (?, ?)`);
+const insertSceneSnapshot = db.prepare(`INSERT INTO scenes (name, snapshot_json) VALUES (?, ?)`);
+const updateSceneSnapshot = db.prepare(`UPDATE scenes SET name = ?, snapshot_json = ? WHERE id = ?`);
+const deleteScene = db.prepare(`DELETE FROM scenes WHERE id = ?`);
 const insertSceneTrack = db.prepare(`
   INSERT OR REPLACE INTO scene_tracks (scene_id, track_id, volume, is_loop)
   VALUES (?, ?, ?, ?)
@@ -301,6 +309,9 @@ module.exports = {
   unlinkTagFromTrack,
   getAllTags,
   insertScene,
+  insertSceneSnapshot,
+  updateSceneSnapshot,
+  deleteScene,
   insertSceneTrack,
   deleteSceneTrack,
   getAllScenes,

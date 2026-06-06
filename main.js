@@ -274,6 +274,19 @@ ipcMain.handle('get-scene-tracks', (_event, sceneId) => {
   return dbManager.getSceneTracks.all(sceneId);
 });
 
+ipcMain.handle('save-scene-snapshot', (_event, name, snapshotJson) => {
+  const result = dbManager.insertSceneSnapshot.run(name, snapshotJson);
+  return result.lastInsertRowid;
+});
+
+ipcMain.handle('update-scene-snapshot', (_event, id, name, snapshotJson) => {
+  dbManager.updateSceneSnapshot.run(name, snapshotJson, id);
+});
+
+ipcMain.handle('delete-scene', (_event, id) => {
+  dbManager.deleteScene.run(id);
+});
+
 ipcMain.handle('update-track-peaks', (_event, trackId, peaks) => {
   dbManager.updateTrackPeaks.run(peaks, trackId);
 });

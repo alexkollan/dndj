@@ -376,6 +376,7 @@ function createDeckVoice(url) {
   return {
     url, audio, sourceNode, deckGainNode, filterNode, xfadeGainNode,
     isLoop: true, loopStart: 0, loopEnd: null,
+    volume: 0.8, filterFreq: 20000, // tracked for snapshots
     _timeHandler: null, _endedHandler: null,
   };
 }
@@ -519,15 +520,59 @@ function seekDeck(deckId, position) {
 
 function setDeckVolume(deckId, volume) {
   const voice = deckVoices[deckId];
-  if (voice) voice.deckGainNode.gain.setTargetAtTime(toGain(volume), getCtx().currentTime, 0.05);
+  if (!voice) return;
+  voice.volume = volume;
+  voice.deckGainNode.gain.setTargetAtTime(toGain(volume), getCtx().currentTime, 0.05);
 }
 
 function setDeckFilter(deckId, freq) {
   const voice = deckVoices[deckId];
-  if (voice)
-    voice.filterNode.frequency.setTargetAtTime(
-      Math.max(80, Math.min(20000, freq)), getCtx().currentTime, 0.05,
-    );
+  if (!voice) return;
+  voice.filterFreq = freq;
+  voice.filterNode.frequency.setTargetAtTime(
+    Math.max(80, Math.min(20000, freq)), getCtx().currentTime, 0.05,
+  );
+}
+
+function setDeckMixerState(deckId, { volume = 0.8, filterFreq = 20000, loopEnabled = true, loopStart = 0, loopEnd = null } = {}) {
+  const voice = deckVoices[deckId];
+  if (!voice) return;
+  const audioTime = getCtx().currentTime;
+  voice.volume = volume;
+  voice.filterFreq = filterFreq;
+  voice.deckGainNode.gain.setTargetAtTime(toGain(volume), audioTime, 0.05);
+  voice.filterNode.frequency.setTargetAtTime(Math.max(80, Math.min(20000, filterFreq)), audioTime, 0.05);
+  voice.isLoop = loopEnabled;
+  voice.loopStart = loopStart ?? 0;
+  voice.loopEnd = loopEnd ?? null;
+  emit('deckMixerReset', { deckId, volume, filterFreq, loopEnabled, loopStart: voice.loopStart, loopEnd: voice.loopEnd });
+}
+
+function fadeDeckVolume(deckId, targetVolume, durationMs) {
+  const voice = deckVoices[deckId];
+  if (!voice) return;
+  const ctx = getCtx();
+  const now = ctx.currentTime;
+  voice.volume = targetVolume;
+  voice.deckGainNode.gain.cancelScheduledValues(now);
+  voice.deckGainNode.gain.setValueAtTime(voice.deckGainNode.gain.value, now);
+  voice.deckGainNode.gain.linearRampToValueAtTime(toGain(targetVolume), now + durationMs / 1000);
+}
+
+function getDeckMixerState(deckId) {
+  const voice = deckVoices[deckId];
+  if (!voice) return null;
+  return {
+    volume: voice.volume ?? 0.8,
+    filterFreq: voice.filterFreq ?? 20000,
+    loopEnabled: voice.isLoop ?? true,
+    loopStart: voice.loopStart ?? 0,
+    loopEnd: voice.loopEnd ?? null,
+  };
+}
+
+function getCrossfadeState() {
+  return { pos: _crossfadePos, curve: _crossfadeCurve };
 }
 
 function setDeckLoop(deckId, loopStart, loopEnd) {
@@ -603,6 +648,10 @@ export {
   seekDeck,
   setDeckVolume,
   setDeckFilter,
+  setDeckMixerState,
+  fadeDeckVolume,
+  getDeckMixerState,
+  getCrossfadeState,
   setDeckLoop,
   setDeckLoopEnabled,
   setCrossfade,

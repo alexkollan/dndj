@@ -81,9 +81,15 @@ function CurveButton({ c, isOn, onClick }) {
   );
 }
 
-function Crossfader() {
-  const [pos, setPos] = useState(0.5);
-  const [curve, setCurve] = useState('equal_power');
+function Crossfader({ initialPos = 0.5, initialCurve = 'equal_power' }) {
+  const [pos, setPos] = useState(initialPos);
+  const [curve, setCurve] = useState(initialCurve);
+
+  // Apply initial values to engine on mount (handles recall remounts)
+  useEffect(() => {
+    setCrossfade(initialPos);
+    setCrossfadeCurve(initialCurve);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleChange = useCallback((e) => {
     const val = parseFloat(e.target.value);

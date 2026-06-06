@@ -5,12 +5,17 @@ import {
 } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import { useUIStore } from '../../store.js';
-import { loadDeck, subscribe } from '../../audioEngine.js';
+import {
+  loadDeck, subscribe,
+  setDeckMixerState, fadeDeckVolume, getDeckMixerState, getCrossfadeState,
+  setCrossfade, setCrossfadeCurve, stopDeck, playDeck,
+} from '../../audioEngine.js';
 import PlaylistRail, { evaluateSmartPlaylist } from './PlaylistRail.jsx';
 import TracklistPanel from './TracklistPanel.jsx';
 import DeckPanel from './DeckPanel.jsx';
 import Crossfader from './Crossfader.jsx';
 import SamplerStrip from './SamplerStrip.jsx';
+import ScenePanel from './ScenePanel.jsx';
 import '../../styles/studio/StudioLayout.css';
 
 const INIT_DECK_STATE = { isPlaying: false, isPaused: false };
@@ -34,6 +39,9 @@ function StudioLayout({
   const [deckState, setDeckState] = useState({ A: INIT_DECK_STATE, B: INIT_DECK_STATE });
 
   const samplerRef = useRef(null);
+  const [samplerKey, setSamplerKey] = useState(0);
+  const [crossfaderKey, setCrossfaderKey] = useState(0);
+  const [crossfaderInit, setCrossfaderInit] = useState({ pos: 0.5, curve: 'equal_power' });
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -100,6 +108,71 @@ function StudioLayout({
     setDeckState(prev => ({ ...prev, [deckId]: INIT_DECK_STATE }));
     await loadDeck(deckId, url);
   }, [urlCache, resolveUrl]);
+
+  // ── Scene snapshot save/recall ──────────────────────────────────────────────
+  const handleGetSnapshot = useCallback(async () => {
+    const mixerA = getDeckMixerState('A');
+    const mixerB = getDeckMixerState('B');
+    const xfade = getCrossfadeState();
+    const samplerRaw = await window.dndj.getSetting('sampler_pads');
+    const samplerPads = samplerRaw ? JSON.parse(samplerRaw) : Array(8).fill(null);
+    return {
+      version: 1,
+      deckA: deckTracks.A ? { path: deckTracks.A.track.path, ...(mixerA || {}) } : null,
+      deckB: deckTracks.B ? { path: deckTracks.B.track.path, ...(mixerB || {}) } : null,
+      crossfade: xfade,
+      samplerPads,
+    };
+  }, [deckTracks]);
+
+  const handleRecall = useCallback(async (snapshot, withFade = false) => {
+    const FADE_MS = 1800;
+    if (withFade) {
+      fadeDeckVolume('A', 0, FADE_MS);
+      fadeDeckVolume('B', 0, FADE_MS);
+      await new Promise(r => setTimeout(r, FADE_MS + 100));
+    }
+    stopDeck('A');
+    stopDeck('B');
+    setDeckState({ A: INIT_DECK_STATE, B: INIT_DECK_STATE });
+
+    for (const [deckId, key] of [['A', 'deckA'], ['B', 'deckB']]) {
+      const snap = snapshot[key];
+      if (!snap?.path) { setDeckTracks(prev => ({ ...prev, [deckId]: null })); continue; }
+      const track = (allTracks || []).find(t => t.path === snap.path);
+      if (!track) continue;
+      const url = urlCache[track.path] || await resolveUrl(track.path);
+      setDeckTracks(prev => ({ ...prev, [deckId]: { track, url } }));
+      await loadDeck(deckId, url);
+      setDeckMixerState(deckId, {
+        volume: withFade ? 0 : (snap.volume ?? 0.8),
+        filterFreq: snap.filterFreq ?? 20000,
+        loopEnabled: snap.loopEnabled ?? true,
+        loopStart: snap.loopStart ?? 0,
+        loopEnd: snap.loopEnd ?? null,
+      });
+      if (withFade) {
+        await playDeck(deckId);
+        fadeDeckVolume(deckId, snap.volume ?? 0.8, FADE_MS);
+      }
+    }
+
+    if (snapshot.crossfade) {
+      const { pos = 0.5, curve = 'equal_power' } = snapshot.crossfade;
+      setCrossfade(pos);
+      setCrossfadeCurve(curve);
+      setCrossfaderInit({ pos, curve });
+      setCrossfaderKey(k => k + 1);
+    }
+
+    if (snapshot.samplerPads) {
+      const toSave = snapshot.samplerPads.map(p =>
+        p ? { trackId: p.trackId, name: p.name, path: p.path, volume: p.volume ?? 0.8 } : null
+      );
+      await window.dndj.setSetting('sampler_pads', JSON.stringify(toSave));
+      setSamplerKey(k => k + 1);
+    }
+  }, [allTracks, urlCache, resolveUrl]);
 
   // ── Rail resize ─────────────────────────────────────────────────────────────
   const startRailResize = useCallback((e) => {
@@ -193,16 +266,25 @@ function StudioLayout({
         {/* ── Body ── */}
         <div className="studio__body">
 
-          {/* Left rail */}
+          {/* Left rail — playlists (top) + scenes (bottom) */}
           <aside className="studio__rail" style={{ width: studioRailWidth }}>
-            <PlaylistRail
-              playlists={playlists}
-              selectedPlaylistId={selectedPlaylistId}
-              onSelect={setSelectedPlaylistId}
-              onLibrarySelect={() => setSelectedPlaylistId(null)}
-              onRefresh={loadPlaylists}
-              allTracks={allTracks || []}
-            />
+            <div className="studio__rail-top">
+              <PlaylistRail
+                playlists={playlists}
+                selectedPlaylistId={selectedPlaylistId}
+                onSelect={setSelectedPlaylistId}
+                onLibrarySelect={() => setSelectedPlaylistId(null)}
+                onRefresh={loadPlaylists}
+                allTracks={allTracks || []}
+              />
+            </div>
+            <div className="studio__rail-divider" />
+            <div className="studio__rail-bottom">
+              <ScenePanel
+                onGetSnapshot={handleGetSnapshot}
+                onRecall={handleRecall}
+              />
+            </div>
           </aside>
           <div className="studio__rail-resizer" onMouseDown={startRailResize} />
 
@@ -221,7 +303,11 @@ function StudioLayout({
               </div>
 
               <div className="studio__crossfader-zone">
-                <Crossfader />
+                <Crossfader
+                  key={crossfaderKey}
+                  initialPos={crossfaderInit.pos}
+                  initialCurve={crossfaderInit.curve}
+                />
               </div>
 
               <div className="studio__deck studio__deck--b deck--b">
@@ -251,6 +337,7 @@ function StudioLayout({
             {/* Sampler strip */}
             <div className="studio__sampler">
               <SamplerStrip
+                key={samplerKey}
                 allTracks={allTracks || []}
                 resolveUrl={resolveUrl}
                 urlCache={urlCache || {}}
