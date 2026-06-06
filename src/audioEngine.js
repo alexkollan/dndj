@@ -199,6 +199,7 @@ function stopAll() {
     pausedState[url] = false;
     emit('trackStopped', { audioUrl: url });
   });
+  stopAllSamples();
 }
 
 function transitionToScene(sceneTracks, durationMs = 2000) {
@@ -293,6 +294,54 @@ function getDuration(audioUrl) {
 
 function crossfade(fromUrl, toUrl, durationMs = 2000, targetVolume = 1) {
   transitionToScene([{ url: toUrl, volume: targetVolume, isLoop: true }], durationMs);
+}
+
+// ─── Sampler Voice Layer (overlapping one-shots, auto-dispose) ───────────────
+
+const samplerVoices = new Set();
+
+async function triggerSample(url, volume = 1.0) {
+  await ensureToneStarted();
+  const ctx = getCtx();
+
+  const audio = new Audio();
+  audio.src = url;
+  audio.preload = 'none';
+
+  const sourceNode = ctx.createMediaElementSource(audio);
+  const gainNode = ctx.createGain();
+  gainNode.gain.value = toGain(volume);
+  sourceNode.connect(gainNode);
+  gainNode.connect(getMasterGain());
+
+  const voice = { audio, sourceNode, gainNode, cleanup: null };
+  samplerVoices.add(voice);
+
+  voice.cleanup = () => {
+    audio.removeEventListener('ended', voice.cleanup);
+    samplerVoices.delete(voice);
+    try { sourceNode.disconnect(); } catch (_) {}
+    try { gainNode.disconnect(); } catch (_) {}
+  };
+  audio.addEventListener('ended', voice.cleanup);
+
+  try {
+    await audio.play();
+    emit('sampleTriggered', { url });
+  } catch (err) {
+    voice.cleanup();
+    console.error('[audioEngine] triggerSample error:', err);
+  }
+}
+
+function stopAllSamples() {
+  samplerVoices.forEach(v => {
+    v.audio.removeEventListener('ended', v.cleanup);
+    v.audio.pause();
+    try { v.sourceNode.disconnect(); } catch (_) {}
+    try { v.gainNode.disconnect(); } catch (_) {}
+  });
+  samplerVoices.clear();
 }
 
 // ─── Deck Voice Layer (additive — does not touch URL-keyed players) ───────────
@@ -531,6 +580,8 @@ function getDeckLoopState(deckId) {
 export {
   playTrack,
   stopTrack,
+  triggerSample,
+  stopAllSamples,
   setTrackVolume,
   setMasterVolume,
   stopAll,

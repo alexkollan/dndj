@@ -10,6 +10,7 @@ import PlaylistRail, { evaluateSmartPlaylist } from './PlaylistRail.jsx';
 import TracklistPanel from './TracklistPanel.jsx';
 import DeckPanel from './DeckPanel.jsx';
 import Crossfader from './Crossfader.jsx';
+import SamplerStrip from './SamplerStrip.jsx';
 import '../../styles/studio/StudioLayout.css';
 
 const INIT_DECK_STATE = { isPlaying: false, isPaused: false };
@@ -31,6 +32,8 @@ function StudioLayout({
   // Deck state
   const [deckTracks, setDeckTracks] = useState({ A: null, B: null }); // { track, url } | null
   const [deckState, setDeckState] = useState({ A: INIT_DECK_STATE, B: INIT_DECK_STATE });
+
+  const samplerRef = useRef(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -133,6 +136,12 @@ function StudioLayout({
       const deckId = overId === 'deck-A' ? 'A' : 'B';
       const track = allTracks.find(t => t.id === trackId);
       if (track) await handleLoadToDeck(deckId, track);
+    } else if (overId.startsWith('pad-')) {
+      const padIdx = parseInt(overId.replace('pad-', ''), 10);
+      const track = allTracks.find(t => t.id === trackId);
+      if (track && !isNaN(padIdx) && SamplerStrip._assignPad) {
+        await SamplerStrip._assignPad(padIdx, track);
+      }
     } else if (overId.startsWith('playlist-')) {
       const playlistId = parseInt(overId.replace('playlist-', ''), 10);
       if (trackId && playlistId) {
@@ -241,12 +250,11 @@ function StudioLayout({
 
             {/* Sampler strip */}
             <div className="studio__sampler">
-              <span className="studio__section-label studio__section-label--sfx">SFX PADS</span>
-              <div className="studio__pads-placeholder">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i} className="studio__pad-placeholder">PAD {i + 1}</div>
-                ))}
-              </div>
+              <SamplerStrip
+                allTracks={allTracks || []}
+                resolveUrl={resolveUrl}
+                urlCache={urlCache || {}}
+              />
             </div>
 
           </div>
