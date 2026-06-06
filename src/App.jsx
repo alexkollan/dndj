@@ -7,6 +7,7 @@ import MasterControls from './components/MasterControls.jsx';
 import SceneList from './components/SceneList.jsx';
 import { setMasterVolume, stopAll, setTrackVolume, subscribe } from './audioEngine.js';
 import { useUIStore, useAudioStore } from './store.js';
+import StudioLayout from './components/studio/StudioLayout.jsx';
 
 // Styles
 import './styles/global.css';
@@ -238,18 +239,11 @@ function App() {
 
   if (uiMode === 'studio') {
     return (
-      <div className="app-container app-container--studio" ref={appRef}>
-        <div className="studio-placeholder">
-          <div className="studio-placeholder__inner">
-            <div className="studio-placeholder__badge">STUDIO MODE</div>
-            <h2 className="studio-placeholder__title">DNDj Studio</h2>
-            <p className="studio-placeholder__sub">Coming in Phase 1 →</p>
-            <button className="studio-placeholder__back" onClick={toggleUiMode}>
-              ← Back to Classic
-            </button>
-          </div>
-        </div>
-      </div>
+      <StudioLayout
+        masterVolume={masterVolume}
+        onMasterVolume={handleMasterVolume}
+        onStopAll={handleStopAll}
+      />
     );
   }
 
