@@ -130,7 +130,13 @@ function PlaylistItem({ playlist, isSelected, depth, onSelect, onRename, onDelet
     setEditing(false);
   }, [editName, playlist.id, playlist.name, onRename]);
 
-  const icon = playlist.type === 'folder' ? '📁' : playlist.type === 'smart' ? '✦' : '♪';
+  const icon = playlist.type === 'folder'
+    ? (
+      <svg className="pl-icon-svg" viewBox="0 0 16 14" fill="currentColor">
+        <path d="M1 2.5A1.5 1.5 0 012.5 1H6a1 1 0 01.707.293L8.414 3H13.5A1.5 1.5 0 0115 4.5v7A1.5 1.5 0 0113.5 13h-11A1.5 1.5 0 011 11.5V2.5z"/>
+      </svg>
+    )
+    : playlist.type === 'smart' ? '✦' : '♪';
 
   return (
     <div className="pl-group" style={{ paddingLeft: depth * 12 }}>
@@ -278,7 +284,13 @@ function PlaylistRail({ playlists, selectedPlaylistId, onSelect, onLibrarySelect
         {/* Inline new-playlist input */}
         {creating && (
           <div className="pl-item pl-item--creating">
-            <span className="pl-item__icon">{creating.type === 'folder' ? '📁' : '♪'}</span>
+            <span className="pl-item__icon">
+              {creating.type === 'folder' ? (
+                <svg className="pl-icon-svg" viewBox="0 0 16 14" fill="currentColor">
+                  <path d="M1 2.5A1.5 1.5 0 012.5 1H6a1 1 0 01.707.293L8.414 3H13.5A1.5 1.5 0 0115 4.5v7A1.5 1.5 0 0113.5 13h-11A1.5 1.5 0 011 11.5V2.5z"/>
+                </svg>
+              ) : '♪'}
+            </span>
             <input
               ref={newNameInputRef}
               className="pl-item__rename"
