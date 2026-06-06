@@ -1,0 +1,351 @@
+/* PlaylistRail.css */
+
+.playlist-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+/* ── Shared item base ── */
+.pl-item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-1-5) var(--s-2);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text-secondary);
+  transition: background var(--t-fast), color var(--t-fast);
+  user-select: none;
+  position: relative;
+  min-width: 0;
+}
+
+.pl-item:hover {
+  background: var(--bg-panel);
+  color: var(--text-primary);
+}
+
+.pl-item--selected {
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+
+.pl-item--over {
+  background: rgba(16, 185, 129, 0.25);
+  outline: 1px dashed var(--accent);
+  outline-offset: -1px;
+}
+
+.pl-item--library {
+  font-weight: var(--weight-bold);
+  margin-bottom: var(--s-1);
+}
+
+.pl-item__icon {
+  font-size: 0.9em;
+  flex-shrink: 0;
+}
+
+.pl-item__name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pl-item__count {
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-bold);
+  color: var(--text-muted);
+  background: var(--bg-app);
+  padding: 1px var(--s-1-5);
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.pl-item__rename {
+  flex: 1;
+  background: var(--bg-app);
+  border: 1px solid var(--accent);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  padding: 1px var(--s-2);
+  outline: none;
+  min-width: 0;
+}
+
+/* Actions (shown on hover) */
+.pl-item__actions {
+  display: none;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.pl-item:hover .pl-item__actions { display: flex; }
+
+.pl-item__btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  padding: 2px 5px;
+  border-radius: var(--radius-sm);
+  line-height: 1;
+  transition: all var(--t-fast);
+}
+.pl-item__btn:hover { color: var(--text-primary); background: var(--bg-card); }
+.pl-item__btn--del:hover { color: var(--danger); }
+
+/* ── Tree nesting ── */
+.pl-group { display: flex; flex-direction: column; }
+
+/* ── Divider ── */
+.pl-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: var(--s-2) 0;
+  flex-shrink: 0;
+}
+
+/* ── Section header ── */
+.pl-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--s-2);
+  margin-bottom: var(--s-1);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-black);
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* ── Create button & menu ── */
+.pl-create-wrap { position: relative; }
+
+.pl-create-btn {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all var(--t-fast);
+  line-height: 1;
+}
+.pl-create-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+.pl-create-menu {
+  position: absolute;
+  top: 24px;
+  right: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border-normal);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: var(--z-dropdown);
+  overflow: hidden;
+  min-width: 160px;
+}
+.pl-create-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--s-2) var(--s-3);
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all var(--t-fast);
+  white-space: nowrap;
+}
+.pl-create-menu button:hover { background: var(--bg-panel); color: var(--text-primary); }
+
+/* ── Playlist tree ── */
+.pl-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.pl-empty {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  padding: var(--s-6) var(--s-2);
+  line-height: 1.7;
+}
+
+/* ── Smart Playlist Editor ── */
+.smart-editor-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+
+.smart-editor {
+  background: var(--bg-card);
+  border: 1px solid var(--border-normal);
+  border-radius: var(--radius-xl);
+  width: 540px;
+  max-width: calc(100vw - var(--s-8));
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: var(--s-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  box-shadow: var(--shadow-xl);
+}
+
+.smart-editor__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: var(--weight-bold);
+  font-size: var(--text-base);
+  color: var(--text-primary);
+}
+
+.smart-editor__close {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: var(--text-xl);
+  line-height: 1;
+  transition: color var(--t-fast);
+  padding: 0 4px;
+}
+.smart-editor__close:hover { color: var(--text-primary); }
+
+.smart-editor__name {
+  width: 100%;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  padding: var(--s-2) var(--s-3);
+  outline: none;
+  transition: border-color var(--t-fast);
+}
+.smart-editor__name:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+
+.smart-editor__combinator {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+.smart-editor__combinator select {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: 3px var(--s-2);
+  font-size: var(--text-sm);
+  outline: none;
+  cursor: pointer;
+}
+
+.smart-editor__rules { display: flex; flex-direction: column; gap: var(--s-2); }
+
+.smart-editor__rule {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.smart-editor__rule select,
+.smart-editor__rule-val {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: var(--s-1) var(--s-2);
+  font-size: var(--text-sm);
+  outline: none;
+  transition: border-color var(--t-fast);
+}
+.smart-editor__rule-val { flex: 1; }
+.smart-editor__rule-val:focus,
+.smart-editor__rule select:focus { border-color: var(--accent); }
+
+.smart-editor__rule-rm {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: var(--text-lg);
+  line-height: 1;
+  padding: 0 var(--s-1);
+  transition: color var(--t-fast);
+}
+.smart-editor__rule-rm:hover { color: var(--danger); }
+
+.smart-editor__hint {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  text-align: center;
+  padding: var(--s-3) 0;
+}
+
+.smart-editor__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s-3);
+  border-top: 1px solid var(--border-subtle);
+  padding-top: var(--s-3);
+}
+
+.smart-editor__btn-add {
+  padding: var(--s-2) var(--s-3);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all var(--t-fast);
+}
+.smart-editor__btn-add:hover { border-color: var(--accent); color: var(--accent); }
+
+.smart-editor__btn-save {
+  padding: var(--s-2) var(--s-5);
+  background: var(--accent);
+  border: none;
+  color: var(--bg-app);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+  transition: filter var(--t-fast);
+}
+.smart-editor__btn-save:hover:not(:disabled) { filter: brightness(1.1); }
+.smart-editor__btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
