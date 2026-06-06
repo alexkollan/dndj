@@ -67,8 +67,9 @@ export default function YoutubeImportDialog({ onClose, onImported, existingCateg
       if (!res?.ready) setStage(STAGES.SETUP);
     });
     window.dndj.onYoutubeProgress((data) => {
-      if (data.phase === 'download') setProgress({ percent: data.percent ?? 0, status: `Downloading… ${data.percent ?? 0}%` });
-      if (data.phase === 'converting') setProgress({ percent: 75, status: 'Converting audio…' });
+      if (data.phase === 'preparing') setProgress({ percent: 0, status: data.status || 'Resolving stream URL…', indeterminate: true });
+      if (data.phase === 'download') setProgress({ percent: data.percent ?? 0, status: `Downloading… ${data.percent ?? 0}%`, indeterminate: false });
+      if (data.phase === 'converting') setProgress({ percent: 75, status: 'Converting audio…', indeterminate: false });
       if (data.phase === 'setup') setSetupLog(prev => prev + (data.status || '') + '\n');
     });
     return () => window.dndj.offYoutubeProgress();
@@ -301,9 +302,12 @@ export default function YoutubeImportDialog({ onClose, onImported, existingCateg
           <div className="yt-dialog__body">
             <p className="yt-msg yt-msg--status">{progress.status || 'Working…'}</p>
             <div className="yt-progress-track">
-              <div className="yt-progress-fill" style={{ width: `${progress.percent}%` }} />
+              <div
+                className={`yt-progress-fill${progress.indeterminate ? ' yt-progress-fill--indeterminate' : ''}`}
+                style={progress.indeterminate ? undefined : { width: `${progress.percent}%` }}
+              />
             </div>
-            <p className="yt-progress-pct">{Math.round(progress.percent)}%</p>
+            <p className="yt-progress-pct">{progress.indeterminate ? '—' : `${Math.round(progress.percent)}%`}</p>
           </div>
         )}
 

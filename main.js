@@ -538,7 +538,7 @@ ipcMain.handle('youtube-import', async (_, { url, category = 'youtube', displayN
 
   const wrap = ytDlpWrap();
 
-  ytSend({ phase: 'download', percent: 0 });
+  ytSend({ phase: 'preparing', status: 'Resolving stream URL…' });
 
   // Use timestamp-prefixed temp name so we can find the file reliably
   const tempBase = `_dl_${Date.now()}`;
@@ -548,10 +548,11 @@ ipcMain.handle('youtube-import', async (_, { url, category = 'youtube', displayN
     const proc = wrap.exec([
       url, '-x', '--audio-quality', '0',
       '--no-playlist', '--no-mtime',
+      '--newline',
       '--ffmpeg-location', path.dirname(ffmpegBin),
       '-o', outputTemplate,
     ]);
-    proc.on('progress', p => ytSend({ phase: 'download', percent: Math.round(p.percent || 0) }));
+    proc.on('progress', p => ytSend({ phase: 'download', percent: Math.round(p.percent ?? 0) }));
     proc.on('close', resolve);
     proc.on('error', reject);
   });
