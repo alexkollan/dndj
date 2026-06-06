@@ -84,14 +84,48 @@ db.exec(`
       key TEXT PRIMARY KEY,
       value TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS playlists (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      name        TEXT NOT NULL,
+      parent_id   INTEGER REFERENCES playlists(id) ON DELETE CASCADE,
+      type        TEXT NOT NULL DEFAULT 'manual',
+      rules_json  TEXT,
+      sort_order  INTEGER NOT NULL DEFAULT 0,
+      created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS playlist_tracks (
+      playlist_id INTEGER NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+      track_id    INTEGER NOT NULL REFERENCES tracks(id)    ON DELETE CASCADE,
+      sort_order  INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (playlist_id, track_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS cue_points (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      track_id   INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+      position   REAL    NOT NULL,
+      label      TEXT    NOT NULL DEFAULT '',
+      color      TEXT    NOT NULL DEFAULT '#10b981'
+    );
 `);
 
 /**
- * Migration
+ * Migrations — always additive, never destructive
  */
 const tracksInfo = db.prepare("PRAGMA table_info(tracks)").all();
 if (!tracksInfo.some(col => col.name === 'peaks')) {
   db.exec("ALTER TABLE tracks ADD COLUMN peaks TEXT");
+}
+if (!tracksInfo.some(col => col.name === 'source')) {
+  db.exec("ALTER TABLE tracks ADD COLUMN source TEXT NOT NULL DEFAULT 'local'");
+}
+if (!tracksInfo.some(col => col.name === 'source_url')) {
+  db.exec("ALTER TABLE tracks ADD COLUMN source_url TEXT");
+}
+if (!tracksInfo.some(col => col.name === 'imported_at')) {
+  db.exec("ALTER TABLE tracks ADD COLUMN imported_at DATETIME");
 }
 
 const tableInfo = db.prepare("PRAGMA table_info(scene_tracks)").all();
@@ -183,6 +217,70 @@ const updateSceneTrackSettings = db.prepare(`
 const getSetting = db.prepare(`SELECT value FROM settings WHERE key = ?`);
 const setSetting = db.prepare(`INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`);
 
+// ─── Playlist Operations ──────────────────────────────────────────────────────
+
+const getAllPlaylists = db.prepare(`
+  SELECT * FROM playlists ORDER BY parent_id ASC, sort_order ASC, name ASC
+`);
+
+const getPlaylistById = db.prepare(`SELECT * FROM playlists WHERE id = ?`);
+
+const insertPlaylist = db.prepare(`
+  INSERT INTO playlists (name, parent_id, type, rules_json, sort_order)
+  VALUES (?, ?, ?, ?, ?)
+`);
+
+const updatePlaylist = db.prepare(`
+  UPDATE playlists SET name = ?, parent_id = ?, rules_json = ?, sort_order = ?
+  WHERE id = ?
+`);
+
+const deletePlaylist = db.prepare(`DELETE FROM playlists WHERE id = ?`);
+
+const getPlaylistTracks = db.prepare(`
+  SELECT t.*, pt.sort_order as playlist_sort_order, GROUP_CONCAT(tg.name) as tags
+  FROM playlist_tracks pt
+  JOIN tracks t ON pt.track_id = t.id
+  LEFT JOIN track_tags tt ON t.id = tt.track_id
+  LEFT JOIN tags tg ON tt.tag_id = tg.id
+  WHERE pt.playlist_id = ? AND t.is_missing = 0
+  GROUP BY t.id
+  ORDER BY pt.sort_order ASC
+`);
+
+const insertPlaylistTrack = db.prepare(`
+  INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, sort_order)
+  VALUES (?, ?, ?)
+`);
+
+const deletePlaylistTrack = db.prepare(`
+  DELETE FROM playlist_tracks WHERE playlist_id = ? AND track_id = ?
+`);
+
+const updatePlaylistTrackOrder = db.prepare(`
+  UPDATE playlist_tracks SET sort_order = ? WHERE playlist_id = ? AND track_id = ?
+`);
+
+const getMaxPlaylistTrackOrder = db.prepare(`
+  SELECT COALESCE(MAX(sort_order), -1) as max_order FROM playlist_tracks WHERE playlist_id = ?
+`);
+
+// ─── Cue Point Operations ─────────────────────────────────────────────────────
+
+const getCuePoints = db.prepare(`
+  SELECT * FROM cue_points WHERE track_id = ? ORDER BY position ASC
+`);
+
+const insertCuePoint = db.prepare(`
+  INSERT INTO cue_points (track_id, position, label, color) VALUES (?, ?, ?, ?)
+`);
+
+const updateCuePoint = db.prepare(`
+  UPDATE cue_points SET position = ?, label = ?, color = ? WHERE id = ?
+`);
+
+const deleteCuePoint = db.prepare(`DELETE FROM cue_points WHERE id = ?`);
+
 module.exports = {
   db,
   initDb,
@@ -205,4 +303,20 @@ module.exports = {
   updateSceneTrackSettings,
   getSetting,
   setSetting,
+  // Playlists
+  getAllPlaylists,
+  getPlaylistById,
+  insertPlaylist,
+  updatePlaylist,
+  deletePlaylist,
+  getPlaylistTracks,
+  insertPlaylistTrack,
+  deletePlaylistTrack,
+  updatePlaylistTrackOrder,
+  getMaxPlaylistTrackOrder,
+  // Cue Points
+  getCuePoints,
+  insertCuePoint,
+  updateCuePoint,
+  deleteCuePoint,
 };

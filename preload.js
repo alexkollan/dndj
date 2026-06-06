@@ -29,4 +29,20 @@ contextBridge.exposeInMainWorld('dndj', {
   // Settings (Persistent state like volumes, layout)
   getSetting: (key) => ipcRenderer.invoke('get-setting', key),
   setSetting: (key, value) => ipcRenderer.invoke('set-setting', key, value),
+
+  // Playlists
+  getPlaylists: () => ipcRenderer.invoke('get-playlists'),
+  createPlaylist: (name, parentId, type, rulesJson) => ipcRenderer.invoke('create-playlist', name, parentId, type, rulesJson),
+  updatePlaylist: (id, name, parentId, rulesJson, sortOrder) => ipcRenderer.invoke('update-playlist', id, name, parentId, rulesJson, sortOrder),
+  deletePlaylist: (id) => ipcRenderer.invoke('delete-playlist', id),
+  getPlaylistTracks: (playlistId) => ipcRenderer.invoke('get-playlist-tracks', playlistId),
+  addTrackToPlaylist: (playlistId, trackId) => ipcRenderer.invoke('add-track-to-playlist', playlistId, trackId),
+  removeTrackFromPlaylist: (playlistId, trackId) => ipcRenderer.invoke('remove-track-from-playlist', playlistId, trackId),
+  reorderPlaylistTrack: (playlistId, trackId, sortOrder) => ipcRenderer.invoke('reorder-playlist-track', playlistId, trackId, sortOrder),
+
+  // Cue Points
+  getCuePoints: (trackId) => ipcRenderer.invoke('get-cue-points', trackId),
+  addCuePoint: (trackId, position, label, color) => ipcRenderer.invoke('add-cue-point', trackId, position, label, color),
+  updateCuePoint: (id, position, label, color) => ipcRenderer.invoke('update-cue-point', id, position, label, color),
+  deleteCuePoint: (id) => ipcRenderer.invoke('delete-cue-point', id),
 });

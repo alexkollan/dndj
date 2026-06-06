@@ -303,6 +303,73 @@ ipcMain.handle('set-setting', (_event, key, value) => {
   dbManager.setSetting.run(key, JSON.stringify(value));
 });
 
+// ─── Playlist IPC Handlers ────────────────────────────────────────────────────
+
+ipcMain.handle('get-playlists', () => {
+  return dbManager.getAllPlaylists.all();
+});
+
+ipcMain.handle('create-playlist', (_event, name, parentId, type, rulesJson) => {
+  const maxOrder = dbManager.getAllPlaylists.all()
+    .filter(p => p.parent_id === (parentId || null))
+    .reduce((m, p) => Math.max(m, p.sort_order), -1);
+  const result = dbManager.insertPlaylist.run(name, parentId || null, type || 'manual', rulesJson || null, maxOrder + 1);
+  return dbManager.getAllPlaylists.all();
+});
+
+ipcMain.handle('update-playlist', (_event, id, name, parentId, rulesJson, sortOrder) => {
+  dbManager.updatePlaylist.run(name, parentId || null, rulesJson || null, sortOrder ?? 0, id);
+  return dbManager.getAllPlaylists.all();
+});
+
+ipcMain.handle('delete-playlist', (_event, id) => {
+  dbManager.deletePlaylist.run(id);
+  return dbManager.getAllPlaylists.all();
+});
+
+ipcMain.handle('get-playlist-tracks', (_event, playlistId) => {
+  return dbManager.getPlaylistTracks.all(playlistId);
+});
+
+ipcMain.handle('add-track-to-playlist', (_event, playlistId, trackId) => {
+  const { max_order } = dbManager.getMaxPlaylistTrackOrder.get(playlistId);
+  dbManager.insertPlaylistTrack.run(playlistId, trackId, max_order + 1);
+  return dbManager.getPlaylistTracks.all(playlistId);
+});
+
+ipcMain.handle('remove-track-from-playlist', (_event, playlistId, trackId) => {
+  dbManager.deletePlaylistTrack.run(playlistId, trackId);
+  return dbManager.getPlaylistTracks.all(playlistId);
+});
+
+ipcMain.handle('reorder-playlist-track', (_event, playlistId, trackId, sortOrder) => {
+  dbManager.updatePlaylistTrackOrder.run(sortOrder, playlistId, trackId);
+  return dbManager.getPlaylistTracks.all(playlistId);
+});
+
+// ─── Cue Point IPC Handlers ───────────────────────────────────────────────────
+
+ipcMain.handle('get-cue-points', (_event, trackId) => {
+  return dbManager.getCuePoints.all(trackId);
+});
+
+ipcMain.handle('add-cue-point', (_event, trackId, position, label, color) => {
+  const result = dbManager.insertCuePoint.run(trackId, position, label || '', color || '#10b981');
+  return dbManager.getCuePoints.all(trackId);
+});
+
+ipcMain.handle('update-cue-point', (_event, id, position, label, color) => {
+  dbManager.updateCuePoint.run(position, label || '', color || '#10b981', id);
+  const cue = dbManager.db.prepare('SELECT track_id FROM cue_points WHERE id = ?').get(id);
+  return cue ? dbManager.getCuePoints.all(cue.track_id) : [];
+});
+
+ipcMain.handle('delete-cue-point', (_event, id) => {
+  const cue = dbManager.db.prepare('SELECT track_id FROM cue_points WHERE id = ?').get(id);
+  dbManager.deleteCuePoint.run(id);
+  return cue ? dbManager.getCuePoints.all(cue.track_id) : [];
+});
+
 /**
  * Handle 'get-audio-url'
  * Converts an absolute file path into an app:// URL that the renderer
