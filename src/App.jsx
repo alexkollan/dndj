@@ -243,6 +243,21 @@ function App() {
         masterVolume={masterVolume}
         onMasterVolume={handleMasterVolume}
         onStopAll={handleStopAll}
+        allTracks={allTracks}
+        tags={tags}
+        resolveUrl={resolveUrl}
+        urlCache={urlCache}
+        onRename={handleRenameTrack}
+        onAddTag={async (id, tag) => {
+          const t = await window.dndj.addTagToTrack(id, tag);
+          setAllTracks(t);
+          setTags(await window.dndj.getTags());
+        }}
+        onLibraryRefresh={async () => {
+          const tracks = await window.dndj.scanLibrary();
+          setAllTracks(tracks);
+          setTags(await window.dndj.getTags());
+        }}
       />
     );
   }
