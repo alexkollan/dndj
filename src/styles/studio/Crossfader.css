@@ -62,7 +62,7 @@
   transform: scaleX(1.1);
 }
 
-/* ── Bottom row: curve selector + preview + center ── */
+/* ── Bottom row ── */
 .xfader__bottom {
   display: flex;
   align-items: center;
@@ -75,7 +75,9 @@
   flex: 1;
 }
 
+/* ── Curve button with tooltip ── */
 .xfader__curve-btn {
+  position: relative;
   flex: 1;
   background: transparent;
   border: 1px solid var(--border-subtle);
@@ -87,7 +89,6 @@
   letter-spacing: 0.04em;
   cursor: pointer;
   transition: all var(--t-fast);
-  white-space: nowrap;
   text-align: center;
 }
 
@@ -102,12 +103,58 @@
   color: var(--accent);
 }
 
-/* ── Curve preview canvas ── */
-.xfader__preview {
+/* ── Tooltip bubble ── */
+.xfader__tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-card);
+  border: 1px solid var(--border-normal);
+  border-radius: var(--radius-md);
+  padding: var(--s-2);
+  box-shadow: var(--shadow-lg);
+  z-index: var(--z-dropdown);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-1);
+  white-space: nowrap;
+}
+
+/* Arrow pointing down */
+.xfader__tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: var(--border-normal);
+}
+
+.xfader__tooltip::before {
+  content: '';
+  position: absolute;
+  top: calc(100% - 1px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: var(--bg-card);
+  z-index: 1;
+}
+
+.xfader__tip-canvas {
   display: block;
   border-radius: var(--radius-sm);
   background: var(--bg-sunken);
-  flex-shrink: 0;
+}
+
+.xfader__tip-label {
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+  font-weight: var(--weight-semibold);
 }
 
 /* ── Center reset ── */
