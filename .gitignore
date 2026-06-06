@@ -12,6 +12,8 @@ data/
 # Binaries / Tools
 *.exe
 yt-dlp_macos
+resources/yt-dlp
+resources/yt-dlp.exe
 
 # Audio Files
 *.mp3

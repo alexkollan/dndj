@@ -495,7 +495,16 @@ ipcMain.handle('youtube-setup', async () => {
   const Mod = require('yt-dlp-wrap');
   const Cls = Mod.default || Mod;
   ytSend({ phase: 'setup', status: 'Downloading yt-dlp…' });
-  await Cls.downloadFromGithub(YT_DLP_BIN);
+  // yt-dlp-wrap always downloads the file named 'yt-dlp' which is the Python zipapp.
+  // On macOS the standalone binary is 'yt-dlp_macos'; download it directly instead.
+  if (process.platform === 'darwin') {
+    const releases = await Cls.getGithubReleases(1, 1);
+    const version = releases[0].tag_name;
+    const url = `https://github.com/yt-dlp/yt-dlp/releases/download/${version}/yt-dlp_macos`;
+    await Cls.downloadFile(url, YT_DLP_BIN);
+  } else {
+    await Cls.downloadFromGithub(YT_DLP_BIN);
+  }
   if (process.platform !== 'win32') fs.chmodSync(YT_DLP_BIN, 0o755);
   ytSend({ phase: 'setup', status: 'Ready' });
   return { ok: true };
@@ -539,6 +548,7 @@ ipcMain.handle('youtube-import', async (_, { url, category = 'youtube', displayN
     const proc = wrap.exec([
       url, '-x', '--audio-quality', '0',
       '--no-playlist', '--no-mtime',
+      '--ffmpeg-location', path.dirname(ffmpegBin),
       '-o', outputTemplate,
     ]);
     proc.on('progress', p => ytSend({ phase: 'download', percent: Math.round(p.percent || 0) }));
