@@ -11,6 +11,20 @@ const { app, BrowserWindow, ipcMain, protocol, net } = require('electron');
 const path = require('path');
 const url = require('url');
 const fs = require('fs');
+
+const AUDIO_MIME_TYPES = {
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.ogg': 'audio/ogg',
+  '.m4a': 'audio/mp4',
+  '.aac': 'audio/aac',
+  '.flac': 'audio/flac',
+  '.webm': 'audio/webm',
+};
+
+function getAudioMime(filePath) {
+  return AUDIO_MIME_TYPES[path.extname(filePath).toLowerCase()] || 'audio/mpeg';
+}
 const { scanLibrary } = require('./libraryScanner');
 const dbManager = require('./src/db/db_manager');
 
@@ -115,7 +129,40 @@ app.whenReady().then(() => {
       return new Response(`Audio file not found: ${path.basename(resolvedPath)}`, { status: 404 });
     }
 
-    return net.fetch(url.pathToFileURL(resolvedPath).toString());
+    const stat = fs.statSync(resolvedPath);
+    const fileSize = stat.size;
+    const mimeType = getAudioMime(resolvedPath);
+    const rangeHeader = request.headers.get('range');
+
+    if (rangeHeader) {
+      // Parse "bytes=start-end" — end is optional
+      const [startStr, endStr] = rangeHeader.replace(/bytes=/, '').split('-');
+      const start = parseInt(startStr, 10);
+      const end = endStr ? parseInt(endStr, 10) : fileSize - 1;
+      const chunkSize = end - start + 1;
+
+      const stream = fs.createReadStream(resolvedPath, { start, end });
+      return new Response(stream, {
+        status: 206,
+        headers: {
+          'Content-Type': mimeType,
+          'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+          'Accept-Ranges': 'bytes',
+          'Content-Length': String(chunkSize),
+        },
+      });
+    }
+
+    // Full file — still advertise range support so the browser will seek properly
+    const stream = fs.createReadStream(resolvedPath);
+    return new Response(stream, {
+      status: 200,
+      headers: {
+        'Content-Type': mimeType,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': String(fileSize),
+      },
+    });
   });
 
   createWindow();

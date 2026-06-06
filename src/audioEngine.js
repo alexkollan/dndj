@@ -1,21 +1,35 @@
-import * as Tone from 'tone';
+import { start as toneStart, getContext } from 'tone';
 
 // ─── Internal State ──────────────────────────────────────────────────────────
 
-const playersCache = {};
-const volumeNodes = {};
-const playQueue = {};
+// players: { [url]: { audio, sourceNode, gainNode, isLoop, loopStart, loopEnd, onEnd, _loopHandler, _endedHandler } }
+const players = {};
 const activeSoundIds = {};
 const pausedState = {};
-const trackStartOffsets = {};
-const trackDurationCache = {};
 const lastPlayCallTimes = {};
 
-// Event system for UI synchronization
+let _masterGain = null;
+
+function getCtx() {
+  return getContext().rawContext;
+}
+
+function getMasterGain() {
+  if (!_masterGain) {
+    const ctx = getCtx();
+    _masterGain = ctx.createGain();
+    _masterGain.gain.value = 1;
+    _masterGain.connect(ctx.destination);
+  }
+  return _masterGain;
+}
+
+// ─── Event System ─────────────────────────────────────────────────────────────
+
 const eventListeners = new Set();
 
 function emit(event, data) {
-  eventListeners.forEach(listener => listener(event, data));
+  eventListeners.forEach(l => l(event, data));
 }
 
 export function subscribe(listener) {
@@ -23,223 +37,228 @@ export function subscribe(listener) {
   return () => eventListeners.delete(listener);
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function volToDb(vol) {
-  if (vol <= 0) return -60; 
-  return 20 * Math.log10(Math.max(0.0001, vol));
-}
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function ensureToneStarted() {
-  if (Tone.context.state !== 'running') {
-    await Tone.start();
+  if (getContext().state !== 'running') {
+    await toneStart();
   }
 }
 
-function getPlayer(audioUrl, loop, onEnd) {
-  if (!playersCache[audioUrl]) {
-    const vol = new Tone.Volume(-60).toDestination();
-    volumeNodes[audioUrl] = vol;
+// Volume 0-1 linear → linear gain (identical, but clamped for safety)
+function toGain(vol) {
+  return Math.max(0, Math.min(1, vol));
+}
 
-    const player = new Tone.Player({
-      url: audioUrl,
-      loop: loop,
-      onload: () => {
-        trackDurationCache[audioUrl] = player.buffer.duration;
-        if (playQueue[audioUrl]) {
-           playQueue[audioUrl]();
-           delete playQueue[audioUrl];
+function getOrCreatePlayer(audioUrl) {
+  if (players[audioUrl]) return players[audioUrl];
+
+  const ctx = getCtx();
+  const audio = new Audio();
+  audio.src = audioUrl;
+  audio.preload = 'none';
+
+  const gainNode = ctx.createGain();
+  gainNode.gain.value = 0;
+  gainNode.connect(getMasterGain());
+
+  const sourceNode = ctx.createMediaElementSource(audio);
+  sourceNode.connect(gainNode);
+
+  const player = { audio, sourceNode, gainNode, isLoop: false, loopStart: 0, loopEnd: null, onEnd: null, _loopHandler: null, _endedHandler: null };
+  players[audioUrl] = player;
+  return player;
+}
+
+function clearHandlers(player) {
+  const { audio } = player;
+  if (player._loopHandler) { audio.removeEventListener('timeupdate', player._loopHandler); player._loopHandler = null; }
+  if (player._endedHandler) { audio.removeEventListener('ended', player._endedHandler); player._endedHandler = null; }
+}
+
+function setupHandlers(audioUrl, player) {
+  clearHandlers(player);
+  const { audio, isLoop, loopStart, loopEnd } = player;
+  const hasCustomPoints = loopStart > 0.001 || (loopEnd !== null && isFinite(loopEnd));
+
+  if (isLoop) {
+    if (hasCustomPoints) {
+      audio.loop = false;
+      const handler = () => {
+        const end = loopEnd ?? audio.duration;
+        if (end && audio.currentTime >= end - 0.1) {
+          audio.currentTime = loopStart;
         }
-      },
-      onstop: () => {
-         // Clean up internal state if stopped
-         if (player.state === 'stopped') {
-            const isActuallyPaused = !!pausedState[audioUrl];
-            if (!isActuallyPaused) {
-              delete activeSoundIds[audioUrl];
-              emit('trackEnded', { audioUrl });
-              if (player.onEndCallback) {
-                setTimeout(() => player.onEndCallback(), 10);
-              }
-            }
-         }
-      }
-    }).connect(vol);
-    playersCache[audioUrl] = player;
+      };
+      audio.addEventListener('timeupdate', handler);
+      player._loopHandler = handler;
+    } else {
+      audio.loop = true;
+    }
+  } else {
+    audio.loop = false;
+    if (loopEnd !== null && isFinite(loopEnd)) {
+      const handler = () => {
+        if (audio.currentTime >= loopEnd) {
+          audio.pause();
+          onTrackEnd(audioUrl, player);
+        }
+      };
+      audio.addEventListener('timeupdate', handler);
+      player._loopHandler = handler;
+    }
+    const endedHandler = () => onTrackEnd(audioUrl, player);
+    audio.addEventListener('ended', endedHandler);
+    player._endedHandler = endedHandler;
   }
-  return playersCache[audioUrl];
 }
 
-// ─── Public API ──────────────────────────────────────────────────────────────
+function onTrackEnd(audioUrl, player) {
+  if (!activeSoundIds[audioUrl]) return; // already cleaned up
+  delete activeSoundIds[audioUrl];
+  emit('trackEnded', { audioUrl });
+  if (player.onEnd) setTimeout(player.onEnd, 10);
+}
+
+// ─── Public API ───────────────────────────────────────────────────────────────
 
 async function playTrack(audioUrl, loop = false, volume = 1, format = 'mp3', onEnd = null, startTime = 0, endTime = null) {
   await ensureToneStarted();
+
   const now = Date.now();
-  if (lastPlayCallTimes[audioUrl] && (now - lastPlayCallTimes[audioUrl] < 150)) {
-    return audioUrl;
-  }
+  if (lastPlayCallTimes[audioUrl] && now - lastPlayCallTimes[audioUrl] < 150) return audioUrl;
   lastPlayCallTimes[audioUrl] = now;
 
-  const player = getPlayer(audioUrl, loop, onEnd);
-  player.onEndCallback = onEnd;
+  const player = getOrCreatePlayer(audioUrl);
+  const { audio, gainNode } = player;
 
-  const performPlay = () => {
-    try {
-      player.stop();
-      const volNode = volumeNodes[audioUrl];
-      volNode.volume.value = volToDb(volume);
+  player.isLoop = loop;
+  player.loopStart = startTime || 0;
+  player.loopEnd = endTime || null;
+  player.onEnd = onEnd;
 
-      const fullDuration = player.buffer.duration || 0;
-      if (!fullDuration || fullDuration === Infinity) return;
+  audio.pause();
+  audio.currentTime = player.loopStart;
+  gainNode.gain.setTargetAtTime(toGain(volume), getCtx().currentTime, 0.01);
 
-      const safeStartTime = Math.max(0, Math.min(startTime, fullDuration - 0.001));
-      let safeEndTime = endTime || fullDuration;
-      safeEndTime = Math.max(safeStartTime + 0.001, Math.min(safeEndTime, fullDuration));
-      
-      const durationSec = safeEndTime - safeStartTime;
-      const isCropped = safeStartTime > 0.001 || Math.abs(safeEndTime - fullDuration) > 0.01;
+  setupHandlers(audioUrl, player);
 
-      player.loopStart = safeStartTime;
-      player.loopEnd = safeEndTime;
-      player.loop = loop;
-
-      trackStartOffsets[audioUrl] = Tone.now() - safeStartTime;
-      
-      if (isCropped && !loop) {
-        player.start(0, safeStartTime, durationSec);
-      } else {
-        player.start(0, safeStartTime);
-      }
-      
-      activeSoundIds[audioUrl] = audioUrl;
-      pausedState[audioUrl] = false;
-      emit('trackStarted', { audioUrl });
-    } catch (err) {
-      console.error(`[audioEngine] Play error for ${audioUrl}:`, err);
-    }
-  };
-
-  if (player.loaded) {
-    performPlay();
-  } else {
-    playQueue[audioUrl] = performPlay;
+  try {
+    await audio.play();
+    activeSoundIds[audioUrl] = audioUrl;
+    pausedState[audioUrl] = false;
+    emit('trackStarted', { audioUrl });
+  } catch (err) {
+    console.error(`[audioEngine] Play error for ${audioUrl}:`, err);
   }
-  
+
   return audioUrl;
 }
 
 function stopTrack(audioUrl) {
-  if (playQueue[audioUrl]) delete playQueue[audioUrl];
-  const player = playersCache[audioUrl];
-  if (player) {
-    player.stop();
-    pausedState[audioUrl] = false;
-    delete activeSoundIds[audioUrl];
-    emit('trackStopped', { audioUrl });
-  }
+  const player = players[audioUrl];
+  if (!player) return;
+  clearHandlers(player);
+  player.audio.pause();
+  player.audio.currentTime = 0;
+  pausedState[audioUrl] = false;
+  delete activeSoundIds[audioUrl];
+  emit('trackStopped', { audioUrl });
 }
 
-/**
- * unloadTrack
- * Completely removes the player and releases the file handle.
- * Critical for renaming files on Windows.
- */
 function unloadTrack(audioUrl) {
-  const player = playersCache[audioUrl];
-  if (player) {
-    player.dispose(); // Releases buffer and Web Audio nodes
-    delete playersCache[audioUrl];
-    delete volumeNodes[audioUrl];
-    delete trackDurationCache[audioUrl];
-    delete activeSoundIds[audioUrl];
-    delete pausedState[audioUrl];
-  }
+  const player = players[audioUrl];
+  if (!player) return;
+  clearHandlers(player);
+  player.audio.pause();
+  player.audio.src = '';
+  try { player.sourceNode.disconnect(); } catch (_) {}
+  try { player.gainNode.disconnect(); } catch (_) {}
+  delete players[audioUrl];
+  delete activeSoundIds[audioUrl];
+  delete pausedState[audioUrl];
 }
 
 function setTrackVolume(audioUrl, volume) {
-  const volNode = volumeNodes[audioUrl];
-  if (volNode) {
-    volNode.volume.rampTo(volToDb(volume), 0.1);
+  const player = players[audioUrl];
+  if (player) {
+    player.gainNode.gain.setTargetAtTime(toGain(volume), getCtx().currentTime, 0.1);
   }
 }
 
 function setMasterVolume(volume) {
-  Tone.Destination.volume.rampTo(volToDb(volume), 0.1);
+  getMasterGain().gain.setTargetAtTime(toGain(volume), getCtx().currentTime, 0.1);
 }
 
 function stopAll() {
-  Object.keys(playersCache).forEach(url => {
-    playersCache[url].stop();
+  Object.keys(players).forEach(url => {
+    const player = players[url];
+    clearHandlers(player);
+    player.audio.pause();
+    delete activeSoundIds[url];
+    pausedState[url] = false;
     emit('trackStopped', { audioUrl: url });
   });
-  Object.keys(playQueue).forEach(url => delete playQueue[url]);
-  Object.keys(pausedState).forEach(k => pausedState[k] = false);
-  Object.keys(activeSoundIds).forEach(k => delete activeSoundIds[k]);
 }
 
-/**
- * transitionToScene
- * Fades out all currently playing tracks that are NOT in the target list,
- * and starts/fades in the new tracks.
- */
 function transitionToScene(sceneTracks, durationMs = 2000) {
+  const ctx = getCtx();
+  const fadeSec = durationMs / 1000;
   const targetUrls = new Set(sceneTracks.map(t => t.url));
-  
-  // 1. Fade out current tracks not in scene
+
+  // Fade out tracks not in the incoming scene
   Object.keys(activeSoundIds).forEach(url => {
     if (!targetUrls.has(url)) {
-      const volNode = volumeNodes[url];
-      if (volNode) {
-        volNode.volume.rampTo(-60, durationMs / 1000);
+      const player = players[url];
+      if (player) {
+        player.gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + fadeSec);
         setTimeout(() => stopTrack(url), durationMs + 100);
       }
     }
   });
 
-  // 2. Start and fade in scene tracks
+  // Start or update scene tracks
   sceneTracks.forEach(track => {
-    const isPlaying = activeSoundIds[track.url];
-    if (!isPlaying) {
+    if (activeSoundIds[track.url]) {
+      setTrackVolume(track.url, track.volume);
+    } else {
       playTrack(track.url, track.isLoop, 0, 'mp3', track.onEnd, track.startTime, track.endTime);
       setTimeout(() => {
-        const volNode = volumeNodes[track.url];
-        if (volNode) volNode.volume.rampTo(volToDb(track.volume), durationMs / 1000);
+        const player = players[track.url];
+        if (player) {
+          player.gainNode.gain.linearRampToValueAtTime(toGain(track.volume), ctx.currentTime + fadeSec);
+        }
       }, 50);
-    } else {
-      // Already playing, just update volume
-      setTrackVolume(track.url, track.volume);
     }
   });
 }
 
 function isPlaying(audioUrl) {
-  const player = playersCache[audioUrl];
-  return player ? player.state === 'started' : false;
+  const player = players[audioUrl];
+  return player ? !player.audio.paused && !player.audio.ended : false;
 }
 
 function pauseTrack(audioUrl) {
-  const player = playersCache[audioUrl];
-  if (player && player.state === 'started') {
-    const elapsed = Tone.now() - trackStartOffsets[audioUrl];
-    pausedState[audioUrl] = elapsed;
-    player.stop();
+  const player = players[audioUrl];
+  if (player && !player.audio.paused) {
+    pausedState[audioUrl] = player.audio.currentTime;
+    player.audio.pause();
     emit('trackPaused', { audioUrl });
   }
 }
 
 function resumeTrack(audioUrl) {
-  const player = playersCache[audioUrl];
-  if (player && pausedState[audioUrl] !== undefined && pausedState[audioUrl] !== false) {
-    if (!player.loaded) {
-        playTrack(audioUrl, player.loop, 1, 'mp3', player.onEndCallback, pausedState[audioUrl]);
-        return;
-    }
-    const startAt = pausedState[audioUrl];
-    trackStartOffsets[audioUrl] = Tone.now() - startAt;
-    player.start(0, startAt);
-    pausedState[audioUrl] = false;
-    emit('trackResumed', { audioUrl });
-  }
+  const player = players[audioUrl];
+  const pos = pausedState[audioUrl];
+  if (!player || pos === false || pos === undefined) return;
+  player.audio.currentTime = pos;
+  player.audio.play()
+    .then(() => {
+      activeSoundIds[audioUrl] = audioUrl;
+      pausedState[audioUrl] = false;
+      emit('trackResumed', { audioUrl });
+    })
+    .catch(err => console.error('[audioEngine] Resume error:', err));
 }
 
 function isPaused(audioUrl) {
@@ -247,49 +266,33 @@ function isPaused(audioUrl) {
 }
 
 function seekTrack(audioUrl, position) {
-  const player = playersCache[audioUrl];
-  if (player) {
-    const wasPlaying = player.state === 'started';
-    player.stop();
-    const dur = trackDurationCache[audioUrl] || player.buffer.duration || Infinity;
-    const safePos = Math.max(0, Math.min(position, dur - 0.001));
-    trackStartOffsets[audioUrl] = Tone.now() - safePos;
-    if (wasPlaying) {
-      if (player.loaded) player.start(0, safePos);
-      else playQueue[audioUrl] = () => player.start(0, safePos);
-    } else {
-      pausedState[audioUrl] = safePos;
-    }
-    emit('trackSeeked', { audioUrl, position: safePos });
-  }
+  const player = players[audioUrl];
+  if (!player) return;
+  const dur = player.audio.duration;
+  const safePos = Math.max(0, Math.min(position, isFinite(dur) ? dur - 0.001 : position));
+  const wasPlaying = !player.audio.paused;
+  player.audio.currentTime = safePos;
+  if (!wasPlaying) pausedState[audioUrl] = safePos;
+  emit('trackSeeked', { audioUrl, position: safePos });
 }
 
 function getPlaybackPosition(audioUrl) {
-  const player = playersCache[audioUrl];
-  if (player && player.state === 'started') {
-     let pos = Tone.now() - trackStartOffsets[audioUrl];
-     if (player.loop) {
-        const loopDur = player.loopEnd - player.loopStart;
-        if (loopDur > 0 && pos > player.loopStart) {
-           pos = ((pos - player.loopStart) % loopDur) + player.loopStart;
-        }
-     }
-     return pos;
-  } else if (pausedState[audioUrl] !== false && pausedState[audioUrl] !== undefined) {
-     return pausedState[audioUrl];
-  }
-  return 0;
+  const player = players[audioUrl];
+  if (!player) return 0;
+  if (!player.audio.paused) return player.audio.currentTime;
+  const pos = pausedState[audioUrl];
+  return (pos !== false && pos !== undefined) ? pos : 0;
 }
 
 function getDuration(audioUrl) {
-  return trackDurationCache[audioUrl] || 0;
+  const player = players[audioUrl];
+  if (!player) return 0;
+  const d = player.audio.duration;
+  return isNaN(d) || !isFinite(d) ? 0 : d;
 }
 
 function crossfade(fromUrl, toUrl, durationMs = 2000, targetVolume = 1) {
-  // Compatibility wrapper for AtmospherePlayer
-  transitionToScene([
-    { url: toUrl, volume: targetVolume, isLoop: true }
-  ], durationMs);
+  transitionToScene([{ url: toUrl, volume: targetVolume, isLoop: true }], durationMs);
 }
 
 export {
