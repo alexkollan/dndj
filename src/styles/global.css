@@ -1,32 +1,6 @@
-/* src/styles/global.css — Design Tokens & Core Layout */
-:root {
-  /* ── Modern Dark Palette (Slate & Emerald) ── */
-  --bg-app:         #020617; /* Slate 950 */
-  --bg-sidebar:     #0b1120; /* Slightly lighter for depth */
-  --bg-panel:       rgba(30, 41, 59, 0.4); /* Slate 800 with glass opacity */
-  --bg-card:        rgba(30, 41, 59, 0.6);
-  --bg-card-hover:  rgba(51, 65, 85, 0.8);
-  
-  --accent:         #10b981; /* Emerald 500 */
-  --accent-glow:    rgba(16, 185, 129, 0.2);
-  --accent-muted:   rgba(16, 185, 129, 0.1);
-  
-  --text-primary:   #f8fafc; /* Slate 50 */
-  --text-secondary: #94a3b8; /* Slate 400 */
-  --text-muted:     #475569; /* Slate 600 */
-  
-  --border-subtle:  rgba(255, 255, 255, 0.05);
-  --border-glow:    rgba(16, 185, 129, 0.4);
-
-  /* ── Spacing Scale ── */
-  --s-1: 0.25rem; --s-2: 0.5rem; --s-3: 0.75rem; 
-  --s-4: 1rem;    --s-6: 1.5rem;  --s-8: 2rem;
-
-  /* ── Transitions ── */
-  --ease: cubic-bezier(0.4, 0, 0.2, 1);
-  --t-fast: 150ms var(--ease);
-  --t-base: 300ms var(--ease);
-}
+/* src/styles/global.css — Reset, typography, and core layout.
+ * All design tokens live in tokens.css (imported below). */
+@import './tokens.css';
 
 /* ── Reset & Typography ── */
 *, *::before, *::after {
@@ -37,10 +11,10 @@
 body {
   background-color: var(--bg-app);
   color: var(--text-primary);
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
-  line-height: 1.5;
+  line-height: var(--leading-normal);
 }
 
 /* ── Core Layout ── */
