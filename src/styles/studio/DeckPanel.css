@@ -23,6 +23,11 @@
 
 .deck-panel--over { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-glow); }
 .deck-panel--empty { opacity: 0.65; }
+.deck-panel--load-flash { animation: deck-load-flash 0.5s ease-out; }
+@keyframes deck-load-flash {
+  0%   { box-shadow: 0 0 0 3px rgba(16,185,129,0.7); }
+  100% { box-shadow: none; }
+}
 
 /* ── Header ── */
 .deck-panel__header {
@@ -240,3 +245,66 @@
   text-align: right;
   flex-shrink: 0;
 }
+
+/* ── Cue marker button ── */
+.deck-btn--add-cue {
+  color: var(--accent);
+  border-color: var(--border-glow);
+  font-size: 9px;
+  letter-spacing: 0;
+}
+
+/* ── Cue points strip ── */
+.deck-panel__cues {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.deck-cue {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 5px 2px 4px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--t-fast);
+}
+
+.deck-cue:hover {
+  border-color: var(--border-normal);
+  background: var(--bg-card);
+}
+
+.deck-cue__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.deck-cue__pos {
+  font-size: 9px;
+  font-weight: var(--weight-bold);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.deck-cue__del {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 0;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity var(--t-fast), color var(--t-fast);
+}
+
+.deck-cue:hover .deck-cue__del { opacity: 1; }
+.deck-cue__del:hover { color: var(--danger); }

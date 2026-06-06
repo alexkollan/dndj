@@ -128,6 +128,27 @@
   opacity: 0.5;
 }
 
+/* ── Stop button ── */
+.sp__stop {
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.5);
+  border: none;
+  color: rgba(255,255,255,0.5);
+  font-size: 8px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 3px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--t-fast), color var(--t-fast);
+  z-index: 2;
+}
+.sp:hover .sp__stop { opacity: 1; }
+.sp__stop:hover { color: #ef4444; background: rgba(0,0,0,0.7); }
+
 /* ── Volume overlay ── */
 .sp__vol-wrap {
   position: absolute;

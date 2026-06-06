@@ -344,6 +344,23 @@ function stopAllSamples() {
   samplerVoices.clear();
 }
 
+function stopSampleByUrl(url) {
+  for (const v of [...samplerVoices]) {
+    if (v.audio.src === url) {
+      v.audio.removeEventListener('ended', v.cleanup);
+      v.audio.pause();
+      v.cleanup();
+    }
+  }
+}
+
+function isSampleUrlPlaying(url) {
+  for (const v of samplerVoices) {
+    if (!v.audio.paused && v.audio.src === url) return true;
+  }
+  return false;
+}
+
 // ─── Deck Voice Layer (additive — does not touch URL-keyed players) ───────────
 
 const deckVoices = {};
@@ -589,11 +606,13 @@ function setDeckLoopEnabled(deckId, enabled) {
   voice.isLoop = enabled;
   if (!voice.audio.paused) setupDeckVoiceHandlers(deckId, voice);
   else voice.audio.loop = enabled && voice.loopStart <= 0.001 && voice.loopEnd == null;
+  emit('deckLoopChanged', { deckId, loopEnabled: enabled });
 }
 
 function setCrossfade(pos) {
   _crossfadePos = Math.max(0, Math.min(1, pos));
   applyDeckCrossfade();
+  emit('crossfadeChanged', { pos: _crossfadePos });
 }
 
 function setCrossfadeCurve(curve) {
@@ -626,6 +645,8 @@ export {
   playTrack,
   stopTrack,
   triggerSample,
+  stopSampleByUrl,
+  isSampleUrlPlaying,
   stopAllSamples,
   setTrackVolume,
   setMasterVolume,

@@ -51,4 +51,26 @@ contextBridge.exposeInMainWorld('dndj', {
   addCuePoint: (trackId, position, label, color) => ipcRenderer.invoke('add-cue-point', trackId, position, label, color),
   updateCuePoint: (id, position, label, color) => ipcRenderer.invoke('update-cue-point', id, position, label, color),
   deleteCuePoint: (id) => ipcRenderer.invoke('delete-cue-point', id),
+
+  // Track management
+  deleteTrack: (trackId, deleteFile) => ipcRenderer.invoke('delete-track', trackId, deleteFile),
+  // Category metadata
+  moveTrackToCategory: (trackId, newCategory) => ipcRenderer.invoke('move-track-to-category', trackId, newCategory),
+  getCategoryMeta: () => ipcRenderer.invoke('get-category-meta'),
+  upsertCategoryMeta: (folderName, displayName, color) => ipcRenderer.invoke('upsert-category-meta', folderName, displayName, color),
+  createCategory: (folderName, displayName, color) => ipcRenderer.invoke('create-category', folderName, displayName, color),
+  deleteCategoryMeta: (folderName) => ipcRenderer.invoke('delete-category-meta', folderName),
+
+  // Tag management
+  createTag: (name, color) => ipcRenderer.invoke('create-tag', name, color),
+  updateTag: (id, name, color) => ipcRenderer.invoke('update-tag', id, name, color),
+  deleteTag: (id) => ipcRenderer.invoke('delete-tag', id),
+
+  // YouTube Import
+  youtubeCheck: () => ipcRenderer.invoke('youtube-check'),
+  youtubeSetup: () => ipcRenderer.invoke('youtube-setup'),
+  youtubeGetInfo: (url) => ipcRenderer.invoke('youtube-get-info', url),
+  youtubeImport: (opts) => ipcRenderer.invoke('youtube-import', opts),
+  onYoutubeProgress: (cb) => ipcRenderer.on('youtube-progress', (_, data) => cb(data)),
+  offYoutubeProgress: () => ipcRenderer.removeAllListeners('youtube-progress'),
 });

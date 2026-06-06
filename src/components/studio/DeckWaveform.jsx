@@ -1,24 +1,93 @@
-import React, { useRef, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect, useMemo, useState, useCallback } from 'react';
 import { getDeckPosition } from '../../audioEngine.js';
 import '../../styles/studio/DeckWaveform.css';
 
-const DECK_COLORS = { A: '#10b981', B: '#f59e0b' };
+const DECK_COLORS = {
+  A: { mid: '#10b981', hi: '#6ee7b7', bass: '#065f46' },
+  B: { mid: '#f59e0b', hi: '#fcd34d', bass: '#78350f' },
+};
+const PEAKS_N = 1200;
 
-function DeckWaveform({ deckId, peaks, loopStart = 0, loopEnd = null, onSeek }) {
+function getPeakMinMax(p) {
+  if (p == null) return { min: 0, max: 0 };
+  if (typeof p === 'number') return { min: -Math.abs(p), max: Math.abs(p) };
+  return { min: p.min || 0, max: p.max || 0 };
+}
+
+async function generatePeaksFromUrl(url) {
+  const response = await fetch(url);
+  const arrayBuffer = await response.arrayBuffer();
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const decoded = await audioCtx.decodeAudioData(arrayBuffer);
+  audioCtx.close();
+  const data = decoded.getChannelData(0);
+  const step = Math.ceil(data.length / PEAKS_N);
+  const peaks = [];
+  for (let i = 0; i < PEAKS_N; i++) {
+    let min = 1, max = -1;
+    for (let j = 0; j < step; j++) {
+      const v = data[i * step + j] || 0;
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+    peaks.push({ min, max });
+  }
+  return peaks;
+}
+
+const ZOOM_LEVELS = [1, 2, 4, 8];
+
+function DeckWaveform({ deckId, peaks, loopStart = 0, loopEnd = null, onSeek, cuePoints = [], url = null, onPeaksReady }) {
   const waveRef = useRef(null);
   const overlayRef = useRef(null);
   const hoverRef = useRef({ active: false, ratio: 0 });
-  const color = DECK_COLORS[deckId] || '#10b981';
+  const cuePointsRef = useRef(cuePoints);
+  useEffect(() => { cuePointsRef.current = cuePoints; }, [cuePoints]);
+
+  const palette = DECK_COLORS[deckId] || DECK_COLORS.A;
+
+  // Zoom state: zoom level and scroll position (0 = start, 1 = end - 1/zoom)
+  const [zoom, setZoom] = useState(1);
+  const [viewStart, setViewStart] = useState(0); // fraction of total waveform
+  const zoomRef = useRef(zoom);
+  const viewStartRef = useRef(viewStart);
+  useEffect(() => { zoomRef.current = zoom; }, [zoom]);
+  useEffect(() => { viewStartRef.current = viewStart; }, [viewStart]);
 
   const peaksArr = useMemo(() => {
     if (!peaks) return null;
     try { return JSON.parse(peaks); } catch { return null; }
   }, [peaks]);
 
-  // Draw static waveform (re-runs only when peaks/color change)
+  const [genPeaks, setGenPeaks] = useState(null);
+  const [generating, setGenerating] = useState(false);
+
+  useEffect(() => { setGenPeaks(null); setZoom(1); setViewStart(0); }, [url]);
+
+  useEffect(() => {
+    if (peaksArr || !url) return;
+    let cancelled = false;
+    setGenerating(true);
+    generatePeaksFromUrl(url)
+      .then(p => {
+        if (cancelled) return;
+        setGenPeaks(p);
+        setGenerating(false);
+        if (onPeaksReady) onPeaksReady(JSON.stringify(p));
+      })
+      .catch(err => {
+        console.error('DeckWaveform: peak generation failed', err);
+        if (!cancelled) setGenerating(false);
+      });
+    return () => { cancelled = true; };
+  }, [url, peaksArr]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const activePeaks = peaksArr || genPeaks;
+
+  // Draw static waveform (Djay-style multi-band)
   useEffect(() => {
     const canvas = waveRef.current;
-    if (!canvas || !peaksArr || peaksArr.length === 0) return;
+    if (!canvas || !activePeaks || activePeaks.length === 0) return;
 
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const { width: W, height: H } = canvas.getBoundingClientRect();
@@ -29,18 +98,60 @@ function DeckWaveform({ deckId, peaks, loopStart = 0, loopEnd = null, onSeek }) 
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, W, H);
 
+    const n = activePeaks.length;
+    const viewFraction = 1 / zoom;
+    const startFrac = viewStart;
+    const endFrac = Math.min(1, startFrac + viewFraction);
+
+    const startIdx = Math.floor(startFrac * n);
+    const endIdx = Math.ceil(endFrac * n);
+    const visibleN = endIdx - startIdx;
+
+    // Bar width with gap — slightly less dense
+    const slotW = W / visibleN;
+    const barW = Math.max(1, slotW * 0.55);
     const midY = H / 2;
-    const n = peaksArr.length;
-    const bw = W / n;
+    const centerGap = 1; // 1px gap at center line
 
-    for (let i = 0; i < n; i++) {
-      const barH = Math.max(1, peaksArr[i] * midY * 0.85);
-      ctx.fillStyle = color + '65';
-      ctx.fillRect(i * bw, midY - barH, Math.max(1, bw - 0.5), barH * 2);
+    for (let vi = 0; vi < visibleN; vi++) {
+      const i = startIdx + vi;
+      if (i >= n) break;
+      const { min, max } = getPeakMinMax(activePeaks[i]);
+      const amp = Math.max(Math.abs(min), Math.abs(max));
+      if (amp < 0.001) continue;
+
+      const x = vi * slotW + (slotW - barW) / 2;
+
+      // Total half-height of bar
+      const halfH = Math.max(1, amp * (midY - centerGap) * 0.9);
+
+      // Three bands: bass (center 30%), mid (middle 50%), hi (top 20%)
+      const bassH = halfH * 0.30;
+      const midH  = halfH * 0.50;
+      const hiH   = halfH * 0.20;
+
+      // Top half (positive): draw from center upward
+      // hi tips (topmost)
+      ctx.fillStyle = palette.hi + 'CC';
+      ctx.fillRect(x, midY - centerGap - hiH - midH - bassH, barW, hiH);
+      // mid section
+      ctx.fillStyle = palette.mid + 'E0';
+      ctx.fillRect(x, midY - centerGap - midH - bassH, barW, midH);
+      // bass (closest to center)
+      ctx.fillStyle = palette.bass + 'FF';
+      ctx.fillRect(x, midY - centerGap - bassH, barW, bassH);
+
+      // Bottom half (mirror)
+      ctx.fillStyle = palette.bass + 'FF';
+      ctx.fillRect(x, midY + centerGap, barW, bassH);
+      ctx.fillStyle = palette.mid + 'E0';
+      ctx.fillRect(x, midY + centerGap + bassH, barW, midH);
+      ctx.fillStyle = palette.hi + 'CC';
+      ctx.fillRect(x, midY + centerGap + bassH + midH, barW, hiH);
     }
-  }, [peaksArr, color]);
+  }, [activePeaks, palette, zoom, viewStart]);
 
-  // Animated overlay: playhead, scanned region, loop markers, hover
+  // Animated overlay
   useEffect(() => {
     const canvas = overlayRef.current;
     if (!canvas) return;
@@ -58,44 +169,73 @@ function DeckWaveform({ deckId, peaks, loopStart = 0, loopEnd = null, onSeek }) 
       ctx.clearRect(0, 0, W, H);
 
       const { currentTime, duration } = getDeckPosition(deckId);
-      const playRatio = duration > 0 ? Math.min(1, currentTime / duration) : 0;
-      const px = playRatio * W;
+      const z = zoomRef.current;
+      const vs = viewStartRef.current;
+      const viewFraction = 1 / z;
 
-      // Scanned region (slightly lighter)
-      ctx.fillStyle = color + '22';
-      ctx.fillRect(0, 0, px, H);
+      // Convert global ratio → canvas x
+      const toX = (globalRatio) => ((globalRatio - vs) / viewFraction) * W;
+      const inView = (globalRatio) => globalRatio >= vs && globalRatio <= vs + viewFraction;
+
+      const playRatio = duration > 0 ? Math.min(1, currentTime / duration) : 0;
+      const px = toX(playRatio);
+
+      // Scanned region (already played, this session)
+      ctx.fillStyle = palette.mid + '1A';
+      ctx.fillRect(0, 0, Math.max(0, px), H);
 
       // Loop region
       if (duration > 0 && (loopStart > 0.001 || (loopEnd !== null && isFinite(loopEnd)))) {
-        const lx = (loopStart / duration) * W;
-        const rx = ((loopEnd ?? duration) / duration) * W;
-        ctx.fillStyle = color + '28';
-        ctx.fillRect(lx, 0, rx - lx, H);
-        ctx.strokeStyle = color + 'B0';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(lx, 0); ctx.lineTo(lx, H);
-        ctx.moveTo(rx, 0); ctx.lineTo(rx, H);
-        ctx.stroke();
+        const lRatio = loopStart / duration;
+        const rRatio = (loopEnd ?? duration) / duration;
+        if (lRatio < vs + viewFraction && rRatio > vs) {
+          const lx = toX(Math.max(vs, lRatio));
+          const rx = toX(Math.min(vs + viewFraction, rRatio));
+          ctx.fillStyle = palette.mid + '28';
+          ctx.fillRect(lx, 0, rx - lx, H);
+          if (inView(lRatio)) {
+            ctx.strokeStyle = palette.mid + 'B0'; ctx.lineWidth = 1.5; ctx.setLineDash([]);
+            ctx.beginPath(); ctx.moveTo(toX(lRatio), 0); ctx.lineTo(toX(lRatio), H); ctx.stroke();
+          }
+          if (inView(rRatio)) {
+            ctx.strokeStyle = palette.mid + 'B0'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(toX(rRatio), 0); ctx.lineTo(toX(rRatio), H); ctx.stroke();
+          }
+        }
+      }
+
+      // Cue markers
+      if (duration > 0) {
+        cuePointsRef.current.forEach(cue => {
+          const cr = cue.position / duration;
+          if (!inView(cr)) return;
+          const cx = toX(cr);
+          const c = cue.color || '#10b981';
+          ctx.globalAlpha = 0.8;
+          ctx.strokeStyle = c; ctx.lineWidth = 1.5; ctx.setLineDash([]);
+          ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, H); ctx.stroke();
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = c;
+          ctx.beginPath();
+          ctx.moveTo(cx - 4, 0); ctx.lineTo(cx + 4, 0); ctx.lineTo(cx, 7);
+          ctx.fill();
+        });
       }
 
       // Playhead
-      ctx.strokeStyle = 'rgba(255,255,255,0.88)';
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
       ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(px, 0);
-      ctx.lineTo(px, H);
-      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, H); ctx.stroke();
 
       // Hover cursor
       if (hoverRef.current.active) {
         const hx = hoverRef.current.ratio * W;
-        ctx.strokeStyle = color + '90';
+        ctx.strokeStyle = palette.mid + '80';
         ctx.lineWidth = 1;
         ctx.setLineDash([3, 3]);
-        ctx.beginPath();
-        ctx.moveTo(hx, 0); ctx.lineTo(hx, H);
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(hx, 0); ctx.lineTo(hx, H); ctx.stroke();
         ctx.setLineDash([]);
       }
 
@@ -104,19 +244,97 @@ function DeckWaveform({ deckId, peaks, loopStart = 0, loopEnd = null, onSeek }) 
 
     animId = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(animId);
-  }, [deckId, color, loopStart, loopEnd]);
+  }, [deckId, palette, loopStart, loopEnd]);
 
-  const handleClick = (e) => {
+  // Seek — map canvas x back to global time
+  const handleClick = useCallback((e) => {
     const rect = overlayRef.current.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const canvasRatio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const viewFraction = 1 / zoomRef.current;
+    const globalRatio = viewStartRef.current + canvasRatio * viewFraction;
     const { duration } = getDeckPosition(deckId);
-    if (duration > 0) onSeek(ratio * duration);
-  };
+    if (duration > 0) onSeek(globalRatio * duration);
+  }, [deckId, onSeek]);
 
-  const handleMouseMove = (e) => {
+  const handleMouseMove = useCallback((e) => {
     const rect = overlayRef.current.getBoundingClientRect();
     hoverRef.current = { active: true, ratio: Math.max(0, (e.clientX - rect.left) / rect.width) };
-  };
+  }, []);
+
+  // Wheel handler:
+  //   ctrlKey=true  → pinch-to-zoom (Mac trackpad pinch sends this)
+  //   |deltaX|>|deltaY| → two-finger horizontal swipe → pan when zoomed
+  //   otherwise     → discrete zoom step (mouse wheel)
+  const handleWheel = useCallback((e) => {
+    e.preventDefault();
+
+    const isPinch = e.ctrlKey;
+    const isHorizontalPan = !isPinch && Math.abs(e.deltaX) > Math.abs(e.deltaY);
+
+    if (isPinch || (!isHorizontalPan)) {
+      // Zoom: pinch uses deltaY magnitude continuously; mouse wheel uses discrete steps
+      const delta = isPinch ? e.deltaY : (e.deltaY < 0 ? -1 : 1);
+      const zIdx = ZOOM_LEVELS.indexOf(zoomRef.current);
+      const next = delta < 0
+        ? ZOOM_LEVELS[Math.min(ZOOM_LEVELS.length - 1, zIdx + 1)]
+        : ZOOM_LEVELS[Math.max(0, zIdx - 1)];
+      if (next === zoomRef.current) return;
+
+      const rect = overlayRef.current.getBoundingClientRect();
+      const cursorRatio = (e.clientX - rect.left) / rect.width;
+      const oldFrac = 1 / zoomRef.current;
+      const globalCursor = viewStartRef.current + cursorRatio * oldFrac;
+      const newFrac = 1 / next;
+      const newStart = Math.max(0, Math.min(1 - newFrac, globalCursor - cursorRatio * newFrac));
+      setZoom(next);
+      setViewStart(newStart);
+    } else {
+      // Horizontal pan (two-finger swipe left/right on trackpad)
+      if (zoomRef.current <= 1) return;
+      const viewFraction = 1 / zoomRef.current;
+      const rect = overlayRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const dx = e.deltaX / rect.width;
+      setViewStart(prev => Math.max(0, Math.min(1 - viewFraction, prev + dx * viewFraction * 2)));
+    }
+  }, []);
+
+  // Drag pan
+  const dragRef = useRef({ active: false, startX: 0, startVs: 0 });
+
+  const handleMouseDown = useCallback((e) => {
+    dragRef.current = { active: true, startX: e.clientX, startVs: viewStartRef.current };
+    e.preventDefault();
+  }, []);
+
+  useEffect(() => {
+    const onMove = (e) => {
+      if (!dragRef.current.active) return;
+      const rect = overlayRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const dx = (e.clientX - dragRef.current.startX) / rect.width;
+      const viewFraction = 1 / zoomRef.current;
+      const newStart = Math.max(0, Math.min(1 - viewFraction, dragRef.current.startVs - dx * viewFraction));
+      setViewStart(newStart);
+    };
+    const onUp = () => { dragRef.current.active = false; };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+  }, []);
+
+  const cycleZoom = useCallback((dir) => {
+    const zIdx = ZOOM_LEVELS.indexOf(zoomRef.current);
+    const next = dir > 0
+      ? ZOOM_LEVELS[Math.min(ZOOM_LEVELS.length - 1, zIdx + 1)]
+      : ZOOM_LEVELS[Math.max(0, zIdx - 1)];
+    if (next === zoomRef.current) return;
+    const newFrac = 1 / next;
+    const center = viewStartRef.current + (1 / zoomRef.current) / 2;
+    const newStart = Math.max(0, Math.min(1 - newFrac, center - newFrac / 2));
+    setZoom(next);
+    setViewStart(newStart);
+  }, []);
 
   return (
     <div className="deck-wf">
@@ -127,9 +345,20 @@ function DeckWaveform({ deckId, peaks, loopStart = 0, loopEnd = null, onSeek }) 
         onClick={handleClick}
         onMouseMove={handleMouseMove}
         onMouseLeave={() => { hoverRef.current = { active: false, ratio: 0 }; }}
+        onMouseDown={handleMouseDown}
+        onWheel={handleWheel}
       />
-      {!peaksArr && (
-        <div className="deck-wf__empty">Drop a track · waveform generates on first Classic view</div>
+      {!activePeaks && (
+        <div className="deck-wf__empty">
+          {generating ? 'Analyzing…' : 'Drop a track here'}
+        </div>
+      )}
+      {activePeaks && (
+        <div className="deck-wf__zoom-controls">
+          <button className="deck-wf__zoom-btn" onClick={() => cycleZoom(-1)} disabled={zoom === 1} title="Zoom out">−</button>
+          <span className="deck-wf__zoom-label">{zoom}×</span>
+          <button className="deck-wf__zoom-btn" onClick={() => cycleZoom(1)} disabled={zoom === ZOOM_LEVELS[ZOOM_LEVELS.length - 1]} title="Zoom in">+</button>
+        </div>
       )}
     </div>
   );

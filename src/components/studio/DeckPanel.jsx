@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import {
   playDeck, pauseDeck, stopDeck, seekDeck,
@@ -7,6 +7,8 @@ import {
 } from '../../audioEngine.js';
 import DeckWaveform from './DeckWaveform.jsx';
 import '../../styles/studio/DeckPanel.css';
+
+const CUE_COLORS = ['#10b981', '#f59e0b', '#818cf8', '#ef4444', '#22d3ee', '#fb923c', '#a78bfa', '#4ade80'];
 
 const DECK_LABELS = { A: 'DECK A', B: 'DECK B' };
 const DECK_COLORS = { A: 'var(--deck-a-color)', B: 'var(--deck-b-color)' };
@@ -19,7 +21,7 @@ function formatTime(sec) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-function DeckPanel({ deckId, track, isPlaying, isPaused }) {
+function DeckPanel({ deckId, track, url, isPlaying, isPaused }) {
   const droppableId = `deck-${deckId}`;
   const { isOver, setNodeRef } = useDroppable({ id: droppableId });
 
@@ -30,6 +32,9 @@ function DeckPanel({ deckId, track, isPlaying, isPaused }) {
   const [loopEnd, setLoopEnd] = useState(null);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
+  const [cuePoints, setCuePoints] = useState([]);
+  const [loadFlash, setLoadFlash] = useState(false);
+  const prevUrl = useRef(null);
 
   // Subscribe to deckMetadata to get duration
   useEffect(() => {
@@ -51,6 +56,7 @@ function DeckPanel({ deckId, track, isPlaying, isPaused }) {
         setLoopStart(data.loopStart ?? 0);
         setLoopEnd(data.loopEnd ?? null);
       }
+      if (event === 'deckLoopChanged') setLoopEnabled(data.loopEnabled);
     });
     return () => unsub();
   }, [deckId]);
@@ -74,6 +80,16 @@ function DeckPanel({ deckId, track, isPlaying, isPaused }) {
     setDeckVolume(deckId, volume);
     setDeckFilter(deckId, filterFreq);
   }, [track?.id, deckId]);
+
+  // Flash confirmation when a new track is loaded
+  useEffect(() => {
+    if (url && url !== prevUrl.current) {
+      prevUrl.current = url;
+      setLoadFlash(true);
+      const t = setTimeout(() => setLoadFlash(false), 500);
+      return () => clearTimeout(t);
+    }
+  }, [url]);
 
   const handlePlayPause = useCallback(() => {
     if (isPlaying) pauseDeck(deckId);
@@ -124,13 +140,36 @@ function DeckPanel({ deckId, track, isPlaying, isPaused }) {
     setDeckLoop(deckId, 0, null);
   }, [deckId]);
 
+  const loadCuePoints = useCallback(async (trackId) => {
+    if (!trackId) { setCuePoints([]); return; }
+    const pts = await window.dndj.getCuePoints(trackId);
+    setCuePoints(pts || []);
+  }, []);
+
+  useEffect(() => { loadCuePoints(track?.id ?? null); }, [track?.id, loadCuePoints]);
+
+  const handleAddCue = useCallback(async () => {
+    if (!track) return;
+    const { currentTime: ct } = getDeckPosition(deckId);
+    const color = CUE_COLORS[cuePoints.length % CUE_COLORS.length];
+    await window.dndj.addCuePoint(track.id, ct, '', color);
+    loadCuePoints(track.id);
+  }, [track, deckId, cuePoints.length, loadCuePoints]);
+
+  const handleDeleteCue = useCallback(async (id) => {
+    await window.dndj.deleteCuePoint(id);
+    if (track) loadCuePoints(track.id);
+  }, [track, loadCuePoints]);
+
+  const handleSeekToCue = useCallback((position) => seekDeck(deckId, position), [deckId]);
+
   const accentColor = DECK_COLORS[deckId];
   const hasLoop = loopStart > 0.001 || (loopEnd !== null && isFinite(loopEnd));
 
   return (
     <div
       ref={setNodeRef}
-      className={`deck-panel ${DECK_ACCENT_CLASS[deckId]} ${isPlaying ? 'deck-panel--playing' : ''} ${isOver ? 'deck-panel--over' : ''} ${!track ? 'deck-panel--empty' : ''}`}
+      className={`deck-panel ${DECK_ACCENT_CLASS[deckId]} ${isPlaying ? 'deck-panel--playing' : ''} ${isOver ? 'deck-panel--over' : ''} ${!track ? 'deck-panel--empty' : ''} ${loadFlash ? 'deck-panel--load-flash' : ''}`}
     >
       {/* ── Header ── */}
       <div className="deck-panel__header">
@@ -150,9 +189,12 @@ function DeckPanel({ deckId, track, isPlaying, isPaused }) {
         <DeckWaveform
           deckId={deckId}
           peaks={track?.peaks}
+          url={url}
           loopStart={loopStart}
           loopEnd={loopEnd}
           onSeek={handleSeek}
+          cuePoints={cuePoints}
+          onPeaksReady={track ? (peaksJson) => window.dndj.updateTrackPeaks(track.id, peaksJson) : null}
         />
       </div>
 
@@ -207,8 +249,36 @@ function DeckPanel({ deckId, track, isPlaying, isPaused }) {
               title="Clear loop points"
             >CLR</button>
           )}
+          <button
+            className="deck-btn deck-btn--sm deck-btn--add-cue"
+            onClick={handleAddCue}
+            disabled={!track}
+            title="Add cue marker at current position"
+          >+ CUE</button>
         </div>
       </div>
+
+      {/* ── Cue points strip ── */}
+      {cuePoints.length > 0 && (
+        <div className="deck-panel__cues">
+          {cuePoints.map(cue => (
+            <div
+              key={cue.id}
+              className="deck-cue"
+              onClick={() => handleSeekToCue(cue.position)}
+              title={`Jump to ${formatTime(cue.position)}`}
+            >
+              <span className="deck-cue__dot" style={{ background: cue.color || '#10b981' }} />
+              <span className="deck-cue__pos">{formatTime(cue.position)}</span>
+              <button
+                className="deck-cue__del"
+                onClick={e => { e.stopPropagation(); handleDeleteCue(cue.id); }}
+                title="Delete cue"
+              >×</button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ── Mixer ── */}
       <div className="deck-panel__mixer">

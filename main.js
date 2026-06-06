@@ -19,8 +19,11 @@ const AUDIO_MIME_TYPES = {
   '.m4a': 'audio/mp4',
   '.aac': 'audio/aac',
   '.flac': 'audio/flac',
-  '.webm': 'audio/webm',
+  '.webm': 'audio/webm; codecs=opus',
+  '.opus': 'audio/webm; codecs=opus', // yt-dlp produces WebM-container Opus; browser needs this MIME
 };
+
+let mainWindow = null;
 
 function getAudioMime(filePath) {
   return AUDIO_MIME_TYPES[path.extname(filePath).toLowerCase()] || 'audio/mpeg';
@@ -86,6 +89,8 @@ function createWindow() {
 
   // In development, load from Vite's hot-reloading dev server.
   // In production (vite build), load the built index.html.
+  mainWindow = win;
+
   const isDev = !app.isPackaged;
   if (isDev) {
     win.loadURL(VITE_DEV_SERVER_URL);
@@ -101,13 +106,14 @@ app.whenReady().then(() => {
   // Register the app:// protocol handler.
   // Maps app://audio/<encoded-absolute-path> → reads the file from disk.
   protocol.handle('app', (request) => {
-    // The URL looks like:  app://audio/<url-encoded-absolute-path>
+    // URL shape: app://audio/<per-segment-encoded-relative-path>
+    // "audio" is the host, so pathname is just the relative track path.
     const requestUrl = new URL(request.url);
-    
-    // The URL parser might include a leading slash in the pathname.
-    // We strip the "/audio" prefix to get the relative track path.
-    const encodedPath = requestUrl.pathname.replace(/^\/audio/, '');
-    let relativeTrackPath = decodeURIComponent(encodedPath);
+    // Decode each segment individually to handle spaces/special chars correctly.
+    let relativeTrackPath = requestUrl.pathname
+      .split('/')
+      .map(seg => decodeURIComponent(seg))
+      .join('/');
 
     // Remove leading slash if present to make it truly relative
     if (relativeTrackPath.startsWith('/')) relativeTrackPath = relativeTrackPath.slice(1);
@@ -387,15 +393,239 @@ ipcMain.handle('delete-cue-point', (_event, id) => {
   return cue ? dbManager.getCuePoints.all(cue.track_id) : [];
 });
 
-/**
- * Handle 'get-audio-url'
- * Converts an absolute file path into an app:// URL that the renderer
- * (and Howler.js) can safely load.
- *
- * @param {Electron.IpcMainInvokeEvent} _event
- * @param {string} filePath - Absolute path to the audio file
- * @returns {string} app:// URL safe for use in Howler
- */
+// ─── Category Meta ───────────────────────────────────────────────────────────
+
+ipcMain.handle('get-category-meta', () => dbManager.getAllCategoryMeta.all());
+
+ipcMain.handle('upsert-category-meta', (_e, folderName, displayName, color) => {
+  dbManager.upsertCategoryMeta.run(folderName, displayName || folderName, color || '#6b7280');
+  return dbManager.getAllCategoryMeta.all();
+});
+
+ipcMain.handle('create-category', (_e, folderName, displayName, color) => {
+  const catDir = path.join(SOUNDS_DIR, folderName);
+  if (!fs.existsSync(catDir)) fs.mkdirSync(catDir, { recursive: true });
+  dbManager.upsertCategoryMeta.run(folderName, displayName || folderName, color || '#6b7280');
+  return dbManager.getAllCategoryMeta.all();
+});
+
+ipcMain.handle('delete-category-meta', (_e, folderName) => {
+  dbManager.deleteCategoryMeta.run(folderName);
+  return dbManager.getAllCategoryMeta.all();
+});
+
+ipcMain.handle('move-track-to-category', async (_e, trackId, newCategory) => {
+  const track = dbManager.getTrackById.get(trackId);
+  if (!track) throw new Error('Track not found');
+
+  const filename = track.path.split('/').pop();
+  const oldAbs = path.join(SOUNDS_DIR, ...track.path.split('/'));
+  const newDir = path.join(SOUNDS_DIR, newCategory);
+  const newAbs = path.join(newDir, filename);
+  const newRel = `${newCategory}/${filename}`;
+
+  if (!fs.existsSync(oldAbs)) throw new Error(`Source file not found: ${oldAbs}`);
+  if (!fs.existsSync(newDir)) fs.mkdirSync(newDir, { recursive: true });
+  if (fs.existsSync(newAbs) && newAbs !== oldAbs) throw new Error(`A file named "${filename}" already exists in "${newCategory}"`);
+
+  fs.renameSync(oldAbs, newAbs);
+  dbManager.db.prepare('UPDATE tracks SET path = ?, category = ? WHERE id = ?').run(newRel, newCategory, trackId);
+
+  return dbManager.getAllTracks.all();
+});
+
+// ─── Tag Management ───────────────────────────────────────────────────────────
+
+ipcMain.handle('delete-track', async (_e, trackId, deleteFile = false) => {
+  const track = dbManager.getTrackById.get(trackId);
+  if (!track) throw new Error('Track not found');
+  if (deleteFile) {
+    const absPath = path.join(SOUNDS_DIR, ...track.path.split('/'));
+    try { if (fs.existsSync(absPath)) fs.unlinkSync(absPath); } catch (_) {}
+  }
+  dbManager.deleteTrack.run(trackId);
+  return dbManager.getAllTracks.all();
+});
+
+ipcMain.handle('create-tag', (_e, name, color) => {
+  dbManager.db.prepare(`INSERT OR IGNORE INTO tags (name, color) VALUES (?, ?)`).run(name, color || '#6b7280');
+  return dbManager.getAllTags.all();
+});
+
+ipcMain.handle('update-tag', (_e, id, name, color) => {
+  dbManager.updateTag.run(name, color || '#6b7280', id);
+  return dbManager.getAllTags.all();
+});
+
+ipcMain.handle('delete-tag', (_e, id) => {
+  dbManager.deleteTag.run(id);
+  return dbManager.getAllTags.all();
+});
+
+// ─── YouTube Import ──────────────────────────────────────────────────────────
+
+const { spawn } = require('child_process');
+const YT_DLP_DIR = path.join(__dirname, 'resources');
+const YT_DLP_BIN = path.join(YT_DLP_DIR, process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
+const YT_SOUNDS_DIR = path.join(SOUNDS_DIR, 'youtube');
+const NATIVE_AUDIO_EXTS = new Set(['mp3', 'm4a', 'aac', 'ogg', 'wav', 'flac', 'webm', 'opus', 'weba']);
+// Preference order when yt-dlp produces multiple temp files
+const AUDIO_EXT_PRIORITY = ['m4a', 'mp3', 'ogg', 'aac', 'flac', 'wav', 'opus', 'webm', 'weba'];
+const ffmpegBin = require('ffmpeg-static');
+
+function ytDlpWrap() {
+  const Mod = require('yt-dlp-wrap');
+  const Cls = Mod.default || Mod;
+  return new Cls(YT_DLP_BIN);
+}
+
+function ytSend(data) {
+  mainWindow?.webContents.send('youtube-progress', data);
+}
+
+// Check if yt-dlp binary exists
+ipcMain.handle('youtube-check', async () => {
+  return { ready: fs.existsSync(YT_DLP_BIN) };
+});
+
+// Download yt-dlp binary from GitHub
+ipcMain.handle('youtube-setup', async () => {
+  if (fs.existsSync(YT_DLP_BIN)) return { ok: true };
+  if (!fs.existsSync(YT_DLP_DIR)) fs.mkdirSync(YT_DLP_DIR, { recursive: true });
+  const Mod = require('yt-dlp-wrap');
+  const Cls = Mod.default || Mod;
+  ytSend({ phase: 'setup', status: 'Downloading yt-dlp…' });
+  await Cls.downloadFromGithub(YT_DLP_BIN);
+  if (process.platform !== 'win32') fs.chmodSync(YT_DLP_BIN, 0o755);
+  ytSend({ phase: 'setup', status: 'Ready' });
+  return { ok: true };
+});
+
+// Fetch video metadata without downloading
+ipcMain.handle('youtube-get-info', async (_, url) => {
+  const wrap = ytDlpWrap();
+  const info = await wrap.getVideoInfo(url);
+  return {
+    id: info.id,
+    title: info.title,
+    duration: info.duration || 0,
+    thumbnail: info.thumbnail || null,
+    channel: info.channel || info.uploader || '',
+    ext: info.ext || 'webm',
+  };
+});
+
+// Download + optionally transcode + insert into DB
+ipcMain.handle('youtube-import', async (_, { url, category = 'youtube', displayName, categoryDisplayName, newCategoryColor, tags = [], format = 'mp3' }) => {
+  // Resolve target directory — use the chosen category folder, not always 'youtube'
+  const targetDir = path.join(SOUNDS_DIR, category);
+  if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+
+  // If a new category was created inline, persist its metadata using the CATEGORY display name
+  // (displayName is the TRACK name, not the category name)
+  if (newCategoryColor) {
+    dbManager.upsertCategoryMeta.run(category, categoryDisplayName || category, newCategoryColor);
+  }
+
+  const wrap = ytDlpWrap();
+
+  ytSend({ phase: 'download', percent: 0 });
+
+  // Use timestamp-prefixed temp name so we can find the file reliably
+  const tempBase = `_dl_${Date.now()}`;
+  const outputTemplate = path.join(targetDir, `${tempBase}.%(ext)s`);
+
+  await new Promise((resolve, reject) => {
+    const proc = wrap.exec([
+      url, '-x', '--audio-quality', '0',
+      '--no-playlist', '--no-mtime',
+      '-o', outputTemplate,
+    ]);
+    proc.on('progress', p => ytSend({ phase: 'download', percent: Math.round(p.percent || 0) }));
+    proc.on('close', resolve);
+    proc.on('error', reject);
+  });
+
+  // Find the downloaded file by the temp prefix
+  // Prefer known audio extensions; skip .part files still being written
+  const allDirFiles = fs.readdirSync(targetDir);
+  const tempFiles = allDirFiles.filter(f => f.startsWith(tempBase) && !f.endsWith('.part') && !f.endsWith('.ytdl'));
+  const downloaded = tempFiles.sort((a, b) => {
+    const extA = path.extname(a).slice(1).toLowerCase();
+    const extB = path.extname(b).slice(1).toLowerCase();
+    const iA = AUDIO_EXT_PRIORITY.indexOf(extA);
+    const iB = AUDIO_EXT_PRIORITY.indexOf(extB);
+    return (iA === -1 ? 999 : iA) - (iB === -1 ? 999 : iB);
+  })[0];
+  if (!downloaded) throw new Error('Download failed: output file not found');
+
+  const downloadedPath = path.join(targetDir, downloaded);
+  const ext = path.extname(downloaded).slice(1).toLowerCase();
+  let finalPath = downloadedPath;
+
+  // Transcode when: user chose mp3/ogg explicitly, or format is not natively playable
+  const needsTranscode = (format === 'mp3' && ext !== 'mp3') || (format === 'ogg' && ext !== 'ogg') || (format !== 'original' && !NATIVE_AUDIO_EXTS.has(ext));
+  if (needsTranscode) {
+    const targetExt = (format === 'ogg') ? 'ogg' : 'mp3';
+    ytSend({ phase: 'converting', percent: 0 });
+    const outPath = downloadedPath.replace(/\.[^.]+$/, `.${targetExt}`);
+    const ffArgs = targetExt === 'ogg'
+      ? ['-i', downloadedPath, '-codec:a', 'libvorbis', '-q:a', '6', '-y', outPath]
+      : ['-i', downloadedPath, '-codec:a', 'libmp3lame', '-q:a', '2', '-y', outPath];
+    await new Promise((resolve, reject) => {
+      const proc = spawn(ffmpegBin, ffArgs);
+      proc.on('close', code => code === 0 ? resolve() : reject(new Error(`ffmpeg exit ${code}`)));
+      proc.on('error', reject);
+    });
+    try { fs.unlinkSync(downloadedPath); } catch (_) {}
+    finalPath = outPath;
+  }
+
+  // Determine the final display name and clean filename
+  const cleanTitle = (displayName || path.basename(finalPath, path.extname(finalPath)))
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').trim().slice(0, 120);
+  const finalExt = path.extname(finalPath).slice(1).toLowerCase();
+  const namedFilename = `${cleanTitle}.${finalExt}`;
+  const namedPath = path.join(targetDir, namedFilename);
+
+  // Avoid overwriting an existing file with the same name
+  let destPath = namedPath;
+  if (fs.existsSync(namedPath) && namedPath !== finalPath) {
+    destPath = path.join(targetDir, `${cleanTitle}_${Date.now()}.${finalExt}`);
+  }
+  if (destPath !== finalPath) fs.renameSync(finalPath, destPath);
+
+  // Build relative DB path using the actual category folder (e.g. "ambient/Track Name.mp3")
+  const relativePath = `${category}/${path.basename(destPath)}`;
+  const trackDisplayName = cleanTitle;
+
+  // Upsert into DB
+  const existing = dbManager.db.prepare('SELECT id FROM tracks WHERE path = ?').get(relativePath);
+  let trackId;
+  if (existing) {
+    dbManager.db.prepare('UPDATE tracks SET is_missing=0, name=?, category=?, source=?, source_url=? WHERE id=?')
+      .run(trackDisplayName, category, 'youtube', url, existing.id);
+    trackId = existing.id;
+  } else {
+    const r = dbManager.db.prepare(
+      `INSERT INTO tracks (path, name, category, format, is_missing, source, source_url, imported_at)
+       VALUES (?, ?, ?, ?, 0, 'youtube', ?, CURRENT_TIMESTAMP)`
+    ).run(relativePath, trackDisplayName, category, finalExt, url);
+    trackId = r.lastInsertRowid;
+  }
+
+  // Apply tags
+  for (const tagName of (tags || [])) {
+    if (!tagName?.trim()) continue;
+    dbManager.db.prepare('INSERT OR IGNORE INTO tags (name, color) VALUES (?, ?)').run(tagName.trim(), '#6b7280');
+    const tag = dbManager.db.prepare('SELECT id FROM tags WHERE name = ?').get(tagName.trim());
+    if (tag) dbManager.db.prepare('INSERT OR IGNORE INTO track_tags (track_id, tag_id) VALUES (?, ?)').run(trackId, tag.id);
+  }
+
+  ytSend({ phase: 'done', trackId });
+  return dbManager.getAllTracks.all();
+});
+
 ipcMain.handle('get-audio-url', (_event, relativePath) => {
   // Security: only serve files inside SOUNDS_DIR
   // We resolve the relative path against our known SOUNDS_DIR
@@ -408,6 +638,9 @@ ipcMain.handle('get-audio-url', (_event, relativePath) => {
     throw new Error('Access denied: file is outside the sounds directory');
   }
   
-  // Return the app:// URL using the relative path portion
-  return `app://audio/${encodeURIComponent(relativePath)}`;
+  // Encode each path segment individually so '/' stays as a path separator.
+  // Using encodeURIComponent on the whole path turns '/' into '%2F', which
+  // Chromium may normalize during range requests (seek/play), causing 404s.
+  const encodedPath = relativePath.split('/').map(encodeURIComponent).join('/');
+  return `app://audio/${encodedPath}`;
 });

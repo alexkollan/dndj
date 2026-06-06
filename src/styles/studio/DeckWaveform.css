@@ -21,6 +21,46 @@
 
 .deck-wf__overlay {
   cursor: crosshair;
+  user-select: none;
+}
+
+.deck-wf__zoom-controls {
+  position: absolute;
+  bottom: 4px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 4px;
+  padding: 2px 4px;
+  pointer-events: auto;
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.deck-wf:hover .deck-wf__zoom-controls { opacity: 1; }
+
+.deck-wf__zoom-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  line-height: 1;
+  padding: 1px 5px;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: color 0.1s, background 0.1s;
+}
+.deck-wf__zoom-btn:hover:not(:disabled) { color: #fff; background: rgba(255,255,255,0.1); }
+.deck-wf__zoom-btn:disabled { color: rgba(255,255,255,0.2); cursor: default; }
+
+.deck-wf__zoom-label {
+  font-size: 10px;
+  color: rgba(255,255,255,0.5);
+  min-width: 20px;
+  text-align: center;
+  font-weight: 600;
 }
 
 .deck-wf__empty {

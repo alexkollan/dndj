@@ -1,15 +1,25 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useDroppable } from '@dnd-kit/core';
-import { triggerSample } from '../../audioEngine.js';
+import { triggerSample, stopSampleByUrl } from '../../audioEngine.js';
 import '../../styles/studio/SamplerStrip.css';
 
 const NUM_PADS = 8;
 const PAD_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8'];
 
-function SamplerPad({ pad, padIdx, onFire, onVolumeChange, onClear }) {
+function SamplerPad({ pad, padIdx, onFire, onStop, onVolumeChange, onClear }) {
   const { isOver, setNodeRef } = useDroppable({ id: `pad-${padIdx}` });
   const [flash, setFlash] = useState(false);
   const [showVol, setShowVol] = useState(false);
+  const prevPad = useRef(pad);
+
+  // Flash when a new track is assigned via drag
+  useEffect(() => {
+    if (pad && pad !== prevPad.current) {
+      setFlash(true);
+      setTimeout(() => setFlash(false), 400);
+    }
+    prevPad.current = pad;
+  }, [pad]);
 
   const fire = useCallback(() => {
     if (!pad?.url) return;
@@ -41,6 +51,14 @@ function SamplerPad({ pad, padIdx, onFire, onVolumeChange, onClear }) {
         <span className="sp__name">{pad.name}</span>
       ) : (
         <span className="sp__empty-hint">drop here</span>
+      )}
+
+      {assigned && (
+        <button
+          className="sp__stop"
+          onClick={e => { e.stopPropagation(); onStop(padIdx); }}
+          title="Stop"
+        >■</button>
       )}
 
       {assigned && showVol && (
@@ -114,6 +132,11 @@ function SamplerStrip({ allTracks, resolveUrl, urlCache }) {
     if (pad?.url) triggerSample(pad.url, pad.volume ?? 0.8);
   }, []);
 
+  const handleStop = useCallback((padIdx) => {
+    const pad = padsRef.current[padIdx];
+    if (pad?.url) stopSampleByUrl(pad.url);
+  }, []);
+
   const handleVolumeChange = useCallback((padIdx, vol) => {
     setPads(prev => {
       const next = [...prev];
@@ -156,6 +179,7 @@ function SamplerStrip({ allTracks, resolveUrl, urlCache }) {
             pad={pad}
             padIdx={i}
             onFire={handleFire}
+            onStop={handleStop}
             onVolumeChange={handleVolumeChange}
             onClear={handleClear}
           />

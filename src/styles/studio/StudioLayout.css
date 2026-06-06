@@ -135,24 +135,18 @@
 
 .studio__stop-btn:hover { background: var(--danger-light); }
 
-.studio__classic-btn {
-  padding: var(--s-1-5) var(--s-3);
+.studio__settings-btn {
+  padding: var(--s-1-5) var(--s-2);
   background: transparent;
   border: 1px solid var(--border-subtle);
   color: var(--text-muted);
   border-radius: var(--radius-md);
-  font-size: var(--text-2xs);
-  font-weight: var(--weight-bold);
+  font-size: 15px;
+  line-height: 1;
   cursor: pointer;
-  letter-spacing: 0.08em;
-  white-space: nowrap;
   transition: all var(--t-fast);
 }
-
-.studio__classic-btn:hover {
-  border-color: var(--border-normal);
-  color: var(--text-secondary);
-}
+.studio__settings-btn:hover { border-color: var(--border-normal); color: var(--text-secondary); }
 
 /* ── Body ─────────────────────────────────────────────────────────────────── */
 .studio__body {
@@ -230,14 +224,27 @@
   gap: var(--s-3);
   padding: var(--s-3) var(--s-4);
   background: var(--bg-sunken);
-  border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
+  /* height is set via inline style from state */
 }
 
 .studio__deck {
   display: flex;
   flex-direction: column;
-  height: var(--studio-deck-height);
+  height: 100%; /* fills the dynamic studio__decks height */
+  min-height: 0;
+}
+
+/* ── Deck / tracklist vertical resizer ───────────────────────────────────── */
+.studio__deck-resizer {
+  height: 4px;
+  background: var(--border-subtle);
+  cursor: row-resize;
+  flex-shrink: 0;
+  transition: background var(--t-fast);
+}
+.studio__deck-resizer:hover {
+  background: var(--accent);
 }
 
 .studio__crossfader-zone {

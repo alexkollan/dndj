@@ -114,11 +114,20 @@ function SmartEditor({ playlist, onSave, onClose }) {
 }
 
 // ─── Droppable Playlist Item ──────────────────────────────────────────────────
-function PlaylistItem({ playlist, isSelected, depth, onSelect, onRename, onDelete, onEditSmart, children }) {
+function PlaylistItem({ playlist, isSelected, depth, onSelect, onRename, onDelete, onEditSmart, dropFlashKey, children }) {
   const { isOver, setNodeRef } = useDroppable({ id: `playlist-${playlist.id}` });
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(playlist.name);
+  const [flash, setFlash] = useState(false);
   const inputRef = useRef(null);
+
+  // Trigger the drop-success flash animation whenever a new drop key arrives
+  useEffect(() => {
+    if (!dropFlashKey) return;
+    setFlash(true);
+    const t = setTimeout(() => setFlash(false), 500);
+    return () => clearTimeout(t);
+  }, [dropFlashKey]);
 
   useEffect(() => {
     if (editing) inputRef.current?.select();
@@ -142,7 +151,7 @@ function PlaylistItem({ playlist, isSelected, depth, onSelect, onRename, onDelet
     <div className="pl-group" style={{ paddingLeft: depth * 12 }}>
       <div
         ref={setNodeRef}
-        className={`pl-item ${isSelected ? 'pl-item--selected' : ''} ${isOver ? 'pl-item--over' : ''}`}
+        className={`pl-item ${isSelected ? 'pl-item--selected' : ''} ${isOver ? 'pl-item--over' : ''} ${flash ? 'pl-item--drop-flash' : ''}`}
         onClick={() => !editing && onSelect(playlist.id)}
         onDoubleClick={() => { setEditing(true); setEditName(playlist.name); }}
       >
@@ -184,7 +193,7 @@ function PlaylistItem({ playlist, isSelected, depth, onSelect, onRename, onDelet
 }
 
 // ─── PlaylistRail ─────────────────────────────────────────────────────────────
-function PlaylistRail({ playlists, selectedPlaylistId, onSelect, onLibrarySelect, onRefresh, allTracks }) {
+function PlaylistRail({ playlists, selectedPlaylistId, onSelect, onLibrarySelect, onRefresh, allTracks, dropFlash }) {
   const [menu, setMenu] = useState(false);
   const [smartEditor, setSmartEditor] = useState(null); // null | 'new' | playlist object
   const [creating, setCreating] = useState(null); // null | { type: 'manual' | 'folder' }
@@ -244,6 +253,7 @@ function PlaylistRail({ playlists, selectedPlaylistId, onSelect, onLibrarySelect
       onRename={handleRename}
       onDelete={handleDelete}
       onEditSmart={setSmartEditor}
+      dropFlashKey={dropFlash?.playlistId === pl.id ? dropFlash.key : null}
     >
       {childrenOf(pl.id).map(child => renderTree(child, depth + 1))}
     </PlaylistItem>

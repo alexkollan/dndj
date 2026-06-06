@@ -7,11 +7,6 @@ import { persist } from 'zustand/middleware';
 export const useUIStore = create(
   persist(
     (set) => ({
-      // 'classic' | 'studio'
-      uiMode: 'classic',
-      setUiMode: (mode) => set({ uiMode: mode }),
-      toggleUiMode: () => set((s) => ({ uiMode: s.uiMode === 'classic' ? 'studio' : 'classic' })),
-
       // Studio panel widths (px)
       studioRailWidth: 220,
       setStudioRailWidth: (w) => set({ studioRailWidth: w }),

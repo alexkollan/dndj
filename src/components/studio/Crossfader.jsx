@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { setCrossfade, setCrossfadeCurve } from '../../audioEngine.js';
+import { setCrossfade, setCrossfadeCurve, subscribe } from '../../audioEngine.js';
 import '../../styles/studio/Crossfader.css';
 
 const CURVES = [
@@ -91,6 +91,14 @@ function Crossfader({ initialPos = 0.5, initialCurve = 'equal_power' }) {
     setCrossfadeCurve(initialCurve);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Sync visual slider when crossfade is changed externally (e.g. keyboard shortcuts)
+  useEffect(() => {
+    const unsub = subscribe((event, data) => {
+      if (event === 'crossfadeChanged') setPos(data.pos);
+    });
+    return () => unsub();
+  }, []);
+
   const handleChange = useCallback((e) => {
     const val = parseFloat(e.target.value);
     setPos(val);
@@ -102,6 +110,17 @@ function Crossfader({ initialPos = 0.5, initialCurve = 'equal_power' }) {
     setCrossfade(0.5);
   }, []);
 
+  // Two-finger horizontal swipe adjusts crossfade position
+  const handleWheel = useCallback((e) => {
+    if (Math.abs(e.deltaX) < Math.abs(e.deltaY)) return; // ignore vertical scroll
+    e.preventDefault();
+    setPos(prev => {
+      const next = Math.max(0, Math.min(1, prev + e.deltaX / 400));
+      setCrossfade(next);
+      return next;
+    });
+  }, []);
+
   const handleCurve = useCallback((id) => {
     setCurve(id);
     setCrossfadeCurve(id);
@@ -110,7 +129,7 @@ function Crossfader({ initialPos = 0.5, initialCurve = 'equal_power' }) {
   const [gA, gB] = computeGains(pos, curve);
 
   return (
-    <div className="xfader">
+    <div className="xfader" onWheel={handleWheel}>
       <div className="xfader__labels">
         <span className="xfader__label xfader__label--a">
           A <span className="xfader__pct">{Math.round(gA * 100)}%</span>

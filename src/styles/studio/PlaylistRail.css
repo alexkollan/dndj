@@ -41,6 +41,16 @@
   outline-offset: -1px;
 }
 
+.pl-item--drop-flash {
+  animation: pl-drop-flash 0.5s ease-out forwards;
+}
+
+@keyframes pl-drop-flash {
+  0%   { background: rgba(16, 185, 129, 0.5); box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.7); }
+  60%  { background: rgba(16, 185, 129, 0.18); box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.3); }
+  100% { background: transparent; box-shadow: none; }
+}
+
 .pl-item--library {
   font-weight: var(--weight-bold);
   margin-bottom: var(--s-1);

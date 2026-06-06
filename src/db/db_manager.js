@@ -144,6 +144,21 @@ if (!scenesInfo.some(col => col.name === 'snapshot_json')) {
   db.exec("ALTER TABLE scenes ADD COLUMN snapshot_json TEXT");
 }
 
+// Category metadata (display name + color per folder name)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS category_meta (
+    folder_name TEXT PRIMARY KEY,
+    display_name TEXT,
+    color       TEXT NOT NULL DEFAULT '#6b7280'
+  )
+`);
+
+// Tag colors
+const tagsInfo = db.prepare("PRAGMA table_info(tags)").all();
+if (!tagsInfo.some(col => col.name === 'color')) {
+  db.exec("ALTER TABLE tags ADD COLUMN color TEXT NOT NULL DEFAULT '#6b7280'");
+}
+
 // ─── Track Operations ────────────────────────────────────────────────────────
 
 const upsertTrack = db.prepare(`
@@ -293,6 +308,24 @@ const updateCuePoint = db.prepare(`
 
 const deleteCuePoint = db.prepare(`DELETE FROM cue_points WHERE id = ?`);
 
+// ─── Category Meta Operations ─────────────────────────────────────────────────
+
+const getAllCategoryMeta = db.prepare(`SELECT * FROM category_meta ORDER BY folder_name ASC`);
+const upsertCategoryMeta = db.prepare(`
+  INSERT INTO category_meta (folder_name, display_name, color) VALUES (?, ?, ?)
+  ON CONFLICT(folder_name) DO UPDATE SET display_name = excluded.display_name, color = excluded.color
+`);
+const deleteCategoryMeta = db.prepare(`DELETE FROM category_meta WHERE folder_name = ?`);
+
+// ─── Track Delete ─────────────────────────────────────────────────────────────
+
+const deleteTrack = db.prepare(`DELETE FROM tracks WHERE id = ?`);
+
+// ─── Tag Management Operations ────────────────────────────────────────────────
+
+const updateTag = db.prepare(`UPDATE tags SET name = ?, color = ? WHERE id = ?`);
+const deleteTag = db.prepare(`DELETE FROM tags WHERE id = ?`);
+
 module.exports = {
   db,
   initDb,
@@ -335,4 +368,13 @@ module.exports = {
   insertCuePoint,
   updateCuePoint,
   deleteCuePoint,
+  // Category Meta
+  getAllCategoryMeta,
+  upsertCategoryMeta,
+  deleteCategoryMeta,
+  // Track Delete
+  deleteTrack,
+  // Tag Management
+  updateTag,
+  deleteTag,
 };

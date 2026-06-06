@@ -4,7 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const SUPPORTED_EXTENSIONS = ['.mp3', '.ogg', '.wav', '.webm'];
+const SUPPORTED_EXTENSIONS = ['.mp3', '.ogg', '.wav', '.webm', '.m4a', '.aac', '.flac', '.opus'];
 
 /**
  * scanLibrary
