@@ -3,7 +3,7 @@
 .xfader {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   gap: var(--s-2);
   width: 100%;
   padding: 0 var(--s-1);
@@ -12,17 +12,27 @@
 .xfader__labels {
   display: flex;
   justify-content: space-between;
-  width: 100%;
+  align-items: baseline;
 }
 
 .xfader__label {
   font-size: var(--text-2xs);
   font-weight: var(--weight-black);
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
 }
 
 .xfader__label--a { color: var(--deck-a-color); }
 .xfader__label--b { color: var(--deck-b-color); }
+
+.xfader__pct {
+  font-size: 9px;
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
 
 .xfader__slider {
   width: 100%;
@@ -49,21 +59,71 @@
 
 .xfader__slider::-webkit-slider-thumb:active {
   cursor: grabbing;
-  transform: scaleX(1.15);
+  transform: scaleX(1.1);
 }
 
+/* ── Bottom row: curve selector + preview + center ── */
+.xfader__bottom {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.xfader__curve-btns {
+  display: flex;
+  gap: 2px;
+  flex: 1;
+}
+
+.xfader__curve-btn {
+  flex: 1;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  padding: 2px 0;
+  font-size: 8px;
+  font-weight: var(--weight-black);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: all var(--t-fast);
+  white-space: nowrap;
+  text-align: center;
+}
+
+.xfader__curve-btn:hover {
+  border-color: var(--border-normal);
+  color: var(--text-secondary);
+}
+
+.xfader__curve-btn--on {
+  background: var(--accent-muted);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── Curve preview canvas ── */
+.xfader__preview {
+  display: block;
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  flex-shrink: 0;
+}
+
+/* ── Center reset ── */
 .xfader__center {
   background: transparent;
   border: 1px solid var(--border-subtle);
   color: var(--text-muted);
   border-radius: var(--radius-sm);
-  padding: 2px var(--s-3);
-  font-size: var(--text-2xs);
-  font-weight: var(--weight-bold);
+  padding: 2px var(--s-2);
+  font-size: 8px;
+  font-weight: var(--weight-black);
   letter-spacing: 0.05em;
   cursor: pointer;
   transition: all var(--t-fast);
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .xfader__center:hover {

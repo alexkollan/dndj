@@ -300,6 +300,7 @@ function crossfade(fromUrl, toUrl, durationMs = 2000, targetVolume = 1) {
 const deckVoices = {};
 const deckLastPlayTimes = {};
 let _crossfadePos = 0.5;
+let _crossfadeCurve = 'equal_power'; // 'equal_power' | 'linear' | 'slow' | 'cut'
 
 function createDeckVoice(url) {
   const ctx = getCtx();
@@ -377,13 +378,38 @@ function setupDeckVoiceHandlers(deckId, voice) {
 }
 
 function applyDeckCrossfade() {
-  const t = getCtx().currentTime;
-  const gainA = Math.cos(_crossfadePos * Math.PI / 2);
-  const gainB = Math.sin(_crossfadePos * Math.PI / 2);
+  const audioTime = getCtx().currentTime;
+  const pos = _crossfadePos;
+  let gainA, gainB;
+
+  switch (_crossfadeCurve) {
+    case 'linear':
+      gainA = 1 - pos;
+      gainB = pos;
+      break;
+    case 'slow': {
+      // Smoothstep remapping — B barely moves until ~40%, then rises steeply
+      const sp = pos * pos * (3 - 2 * pos);
+      gainA = Math.cos(sp * Math.PI / 2);
+      gainB = Math.sin(sp * Math.PI / 2);
+      break;
+    }
+    case 'cut':
+      // DJ-style: each side stays at 100% until center, then cuts with cosine
+      gainA = pos <= 0.5 ? 1 : Math.cos((pos - 0.5) * Math.PI);
+      gainB = pos >= 0.5 ? 1 : Math.cos((0.5 - pos) * Math.PI);
+      break;
+    case 'equal_power':
+    default:
+      gainA = Math.cos(pos * Math.PI / 2);
+      gainB = Math.sin(pos * Math.PI / 2);
+      break;
+  }
+
   if (deckVoices['A']?.xfadeGainNode)
-    deckVoices['A'].xfadeGainNode.gain.setTargetAtTime(gainA, t, 0.02);
+    deckVoices['A'].xfadeGainNode.gain.setTargetAtTime(gainA, audioTime, 0.02);
   if (deckVoices['B']?.xfadeGainNode)
-    deckVoices['B'].xfadeGainNode.gain.setTargetAtTime(gainB, t, 0.02);
+    deckVoices['B'].xfadeGainNode.gain.setTargetAtTime(gainB, audioTime, 0.02);
 }
 
 async function loadDeck(deckId, url) {
@@ -476,6 +502,11 @@ function setCrossfade(pos) {
   applyDeckCrossfade();
 }
 
+function setCrossfadeCurve(curve) {
+  _crossfadeCurve = curve;
+  applyDeckCrossfade();
+}
+
 function getDeckPosition(deckId) {
   const voice = deckVoices[deckId];
   if (!voice) return { currentTime: 0, duration: 0 };
@@ -524,6 +555,7 @@ export {
   setDeckLoop,
   setDeckLoopEnabled,
   setCrossfade,
+  setCrossfadeCurve,
   getDeckPosition,
   getDeckIsPlaying,
   getDeckLoopState,
