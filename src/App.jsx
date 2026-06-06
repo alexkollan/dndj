@@ -6,6 +6,7 @@ import Soundboard from './components/Soundboard.jsx';
 import MasterControls from './components/MasterControls.jsx';
 import SceneList from './components/SceneList.jsx';
 import { setMasterVolume, stopAll, setTrackVolume, subscribe } from './audioEngine.js';
+import { useUIStore, useAudioStore } from './store.js';
 
 // Styles
 import './styles/global.css';
@@ -17,6 +18,9 @@ const SFX_CATEGORY = 'sfx';
 const SCENES_CATEGORY = 'scenes';
 
 function App() {
+  const { uiMode, toggleUiMode } = useUIStore();
+  const { addPlaying, removePlaying, addPaused, clearAll, playingUrls, pausedUrls } = useAudioStore();
+
   const [allTracks, setAllTracks] = useState([]);
   const [tags, setTags] = useState([]);
   const [scenes, setScenes] = useState([]);
@@ -30,8 +34,6 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTags, setSelectedTags] = useState([]);
   const [masterVolume, setMasterVolumeState] = useState(0.8);
-  const [playingUrls, setPlayingUrls] = useState(new Set());
-  const [pausedUrls, setPausedUrls] = useState(new Set());
   const [urlCache, setUrlCache] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -41,42 +43,15 @@ function App() {
   useEffect(() => {
     const unsubscribe = subscribe((event, data) => {
       if (event === 'trackStarted' || event === 'trackResumed') {
-        setPlayingUrls(prev => {
-          if (prev.has(data.audioUrl)) return prev;
-          const next = new Set(prev);
-          next.add(data.audioUrl);
-          return next;
-        });
-        setPausedUrls(prev => {
-          if (!prev.has(data.audioUrl)) return prev;
-          const next = new Set(prev);
-          next.delete(data.audioUrl);
-          return next;
-        });
+        addPlaying(data.audioUrl);
       } else if (event === 'trackEnded' || event === 'trackStopped') {
-        setPlayingUrls(prev => {
-          if (!prev.has(data.audioUrl)) return prev;
-          const next = new Set(prev);
-          next.delete(data.audioUrl);
-          return next;
-        });
-        setPausedUrls(prev => {
-          if (!prev.has(data.audioUrl)) return prev;
-          const next = new Set(prev);
-          next.delete(data.audioUrl);
-          return next;
-        });
+        removePlaying(data.audioUrl);
       } else if (event === 'trackPaused') {
-        setPausedUrls(prev => {
-          if (prev.has(data.audioUrl)) return prev;
-          const next = new Set(prev);
-          next.add(data.audioUrl);
-          return next;
-        });
+        addPaused(data.audioUrl);
       }
     });
     return () => unsubscribe();
-  }, []);
+  }, [addPlaying, removePlaying, addPaused]);
 
   const resolveUrl = useCallback(async (filePath) => {
     if (urlCache[filePath]) return urlCache[filePath];
@@ -161,9 +136,8 @@ function App() {
 
   const handleStopAll = useCallback(() => {
     stopAll();
-    setPlayingUrls(new Set());
-    setPausedUrls(new Set());
-  }, []);
+    clearAll();
+  }, [clearAll]);
 
   const handleCreateEmptyScene = useCallback(async (name) => {
     if (!name) return;
@@ -228,15 +202,16 @@ function App() {
   if (loading) return <div className="app-container"><p>Scanning...</p></div>;
   if (error) return <div className="app-container"><p>{error}</p></div>;
 
+  const noop = () => {};
   let mainContent;
   if (selectedCategory === SCENES_CATEGORY) {
-    mainContent = <SceneList scenes={scenes} resolveUrl={resolveUrl} onPlayingUrlsChange={setPlayingUrls} playingUrls={playingUrls} onAddTag={async (id, tag) => {
+    mainContent = <SceneList scenes={scenes} resolveUrl={resolveUrl} onPlayingUrlsChange={noop} playingUrls={playingUrls} onAddTag={async (id, tag) => {
       const t = await window.dndj.addTagToTrack(id, tag);
       setAllTracks(t);
       setTags(await window.dndj.getTags());
     }} onRename={handleRenameTrack} />;
   } else if (selectedCategory === SFX_CATEGORY) {
-    mainContent = <Soundboard library={library} filteredTracks={filteredTracks} resolveUrl={resolveUrl} urlCache={urlCache} playingUrls={playingUrls} pausedUrls={pausedUrls} onPlayingUrlsChange={setPlayingUrls} scenes={scenes} onAddToScene={handleAddToScene} onRename={handleRenameTrack} />;
+    mainContent = <Soundboard library={library} filteredTracks={filteredTracks} resolveUrl={resolveUrl} urlCache={urlCache} playingUrls={playingUrls} pausedUrls={pausedUrls} onPlayingUrlsChange={noop} scenes={scenes} onAddToScene={handleAddToScene} onRename={handleRenameTrack} />;
   } else {
     mainContent = (
       <AtmospherePlayer
@@ -247,7 +222,7 @@ function App() {
         urlCache={urlCache}
         playingUrls={playingUrls}
         pausedUrls={pausedUrls}
-        onPlayingUrlsChange={setPlayingUrls}
+        onPlayingUrlsChange={noop}
         categorySettings={settings.categories[selectedCategory]}
         scenes={scenes}
         onAddToScene={handleAddToScene}
@@ -261,13 +236,35 @@ function App() {
     );
   }
 
+  if (uiMode === 'studio') {
+    return (
+      <div className="app-container app-container--studio" ref={appRef}>
+        <div className="studio-placeholder">
+          <div className="studio-placeholder__inner">
+            <div className="studio-placeholder__badge">STUDIO MODE</div>
+            <h2 className="studio-placeholder__title">DNDj Studio</h2>
+            <p className="studio-placeholder__sub">Coming in Phase 1 →</p>
+            <button className="studio-placeholder__back" onClick={toggleUiMode}>
+              ← Back to Classic
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app-container" ref={appRef}>
       <CategorySidebar categories={categories} selectedCategory={selectedCategory} onSelect={setSelectedCategory} />
       <div className="resizer" onMouseDown={startResizing('sidebar')} />
       <main className="main-content">
         <header className="main-header">
-          <h1 className="panel-title">{selectedCategory?.toUpperCase() || 'DNDJ'}</h1>
+          <div className="main-header__top">
+            <h1 className="panel-title">{selectedCategory?.toUpperCase() || 'DNDJ'}</h1>
+            <button className="btn-mode-toggle" onClick={toggleUiMode} title="Switch to Studio mode">
+              🎚 STUDIO
+            </button>
+          </div>
           {selectedCategory !== SCENES_CATEGORY && (
             <div className="search-filter">
               <input type="text" placeholder="Search tracks..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="search-input" />
@@ -285,14 +282,14 @@ function App() {
       </main>
       <div className="resizer" onMouseDown={startResizing('controls')} />
       <aside className="controls-panel">
-        <MasterControls 
-          masterVolume={masterVolume} 
-          onMasterVolume={handleMasterVolume} 
-          onStopAll={handleStopAll} 
-          onCreateEmptyScene={handleCreateEmptyScene} 
-          categories={categories} 
-          categorySettings={settings.categories} 
-          onCategoryChange={updateCategorySetting} 
+        <MasterControls
+          masterVolume={masterVolume}
+          onMasterVolume={handleMasterVolume}
+          onStopAll={handleStopAll}
+          onCreateEmptyScene={handleCreateEmptyScene}
+          categories={categories}
+          categorySettings={settings.categories}
+          onCategoryChange={updateCategorySetting}
         />
       </aside>
     </div>
