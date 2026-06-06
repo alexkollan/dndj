@@ -233,6 +233,7 @@
   flex-direction: column;
   height: 100%; /* fills the dynamic studio__decks height */
   min-height: 0;
+  min-width: 0; /* prevent content from inflating the 1fr cell */
 }
 
 /* ── Deck / tracklist vertical resizer ───────────────────────────────────── */
@@ -254,6 +255,34 @@
   justify-content: center;
   gap: var(--s-2);
   min-width: 140px;
+  position: relative;
+}
+
+/* Drag handle at the top of the crossfader zone for resizing decks */
+.studio__deck-split-handle {
+  position: absolute;
+  top: 0;
+  left: -6px;
+  right: -6px;
+  height: 20px;
+  cursor: col-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.studio__deck-split-handle::after {
+  content: '⠿';
+  font-size: 10px;
+  color: var(--border-subtle);
+  letter-spacing: -1px;
+  transition: color var(--t-fast);
+  user-select: none;
+}
+
+.studio__deck-split-handle:hover::after {
+  color: var(--accent);
 }
 
 /* ── Tracklist ───────────────────────────────────────────────────────────── */

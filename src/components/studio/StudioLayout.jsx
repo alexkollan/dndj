@@ -28,10 +28,15 @@ function StudioLayout({
   allTracks, tags, resolveUrl, urlCache,
   onRename, onAddTag, onLibraryRefresh, onTagsChange, onTracksChange,
 }) {
-  const { studioRailWidth, setStudioRailWidth } = useUIStore();
+  const { studioRailWidth, setStudioRailWidth, deckASplit, setDeckASplit } = useUIStore();
   const railResizing = useRef(false);
   const railStartX = useRef(0);
   const railStartW = useRef(0);
+
+  const decksRef = useRef(null);
+  const splitResizing = useRef(false);
+  const splitStartX = useRef(0);
+  const splitStartV = useRef(0);
 
   const [deckHeight, setDeckHeight] = useState(220);
   const deckResizing = useRef(false);
@@ -317,6 +322,27 @@ function StudioLayout({
     window.addEventListener('mouseup', onUp);
   }, [studioRailWidth, setStudioRailWidth]);
 
+  // ── Deck A/B split resize ────────────────────────────────────────────────────
+  const startDeckSplitResize = useCallback((e) => {
+    e.preventDefault();
+    splitResizing.current = true;
+    splitStartX.current = e.clientX;
+    splitStartV.current = deckASplit;
+    const onMove = (me) => {
+      if (!splitResizing.current) return;
+      const totalW = decksRef.current?.offsetWidth ?? 800;
+      const delta = (me.clientX - splitStartX.current) / totalW;
+      setDeckASplit(Math.max(0.2, Math.min(0.8, splitStartV.current + delta)));
+    };
+    const onUp = () => {
+      splitResizing.current = false;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [deckASplit, setDeckASplit]);
+
   // ── DnD handlers ─────────────────────────────────────────────────────────────
   const handleDragStart = useCallback(({ active }) => {
     setActiveDrag({ id: active.id, name: active.data.current?.trackName || String(active.id) });
@@ -427,7 +453,14 @@ function StudioLayout({
           <div className="studio__center">
 
             {/* Deck zone */}
-            <div className="studio__decks" style={{ height: deckHeight }}>
+            <div
+              className="studio__decks"
+              ref={decksRef}
+              style={{
+                height: deckHeight,
+                gridTemplateColumns: `${deckASplit}fr auto ${1 - deckASplit}fr`,
+              }}
+            >
               <div className="studio__deck studio__deck--a deck--a">
                 <DeckPanel
                   deckId="A"
@@ -439,6 +472,11 @@ function StudioLayout({
               </div>
 
               <div className="studio__crossfader-zone">
+                <div
+                  className="studio__deck-split-handle"
+                  onMouseDown={startDeckSplitResize}
+                  title="Drag to resize decks"
+                />
                 <Crossfader
                   key={crossfaderKey}
                   initialPos={crossfaderInit.pos}

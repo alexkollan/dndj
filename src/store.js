@@ -10,6 +10,9 @@ export const useUIStore = create(
       // Studio panel widths (px)
       studioRailWidth: 220,
       setStudioRailWidth: (w) => set({ studioRailWidth: w }),
+      // Deck A width fraction (0.2–0.8); 0.5 = equal decks
+      deckASplit: 0.5,
+      setDeckASplit: (v) => set({ deckASplit: v }),
     }),
     { name: 'dndj-ui' }
   )
