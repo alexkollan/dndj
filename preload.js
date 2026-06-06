@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('dndj', {
   getScenes: () => ipcRenderer.invoke('get-scenes'),
   getSceneTracks: (sceneId) => ipcRenderer.invoke('get-scene-tracks', sceneId),
   updateTrackPeaks: (trackId, peaks) => ipcRenderer.invoke('update-track-peaks', trackId, peaks),
+  updateTrackDuration: (trackId, duration) => ipcRenderer.invoke('update-track-duration', trackId, duration),
   renameTrack: (trackId, newName) => ipcRenderer.invoke('rename-track', trackId, newName),
 
   // Settings (Persistent state like volumes, layout)

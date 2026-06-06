@@ -278,6 +278,10 @@ ipcMain.handle('update-track-peaks', (_event, trackId, peaks) => {
   dbManager.updateTrackPeaks.run(peaks, trackId);
 });
 
+ipcMain.handle('update-track-duration', (_event, trackId, duration) => {
+  dbManager.updateTrackDuration.run(duration, trackId);
+});
+
 ipcMain.handle('rename-track', async (_event, trackId, newName) => {
   const track = dbManager.getTrackById.get(trackId);
   if (!track) throw new Error('Track not found');

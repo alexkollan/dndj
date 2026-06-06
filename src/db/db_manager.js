@@ -127,6 +127,9 @@ if (!tracksInfo.some(col => col.name === 'source_url')) {
 if (!tracksInfo.some(col => col.name === 'imported_at')) {
   db.exec("ALTER TABLE tracks ADD COLUMN imported_at DATETIME");
 }
+if (!tracksInfo.some(col => col.name === 'duration')) {
+  db.exec("ALTER TABLE tracks ADD COLUMN duration REAL");
+}
 
 const tableInfo = db.prepare("PRAGMA table_info(scene_tracks)").all();
 if (!tableInfo.some(col => col.name === 'start_time')) {
@@ -150,6 +153,7 @@ const upsertTrack = db.prepare(`
 const markAllMissing = db.prepare(`UPDATE tracks SET is_missing = 1`);
 
 const updateTrackPeaks = db.prepare(`UPDATE tracks SET peaks = ? WHERE id = ?`);
+const updateTrackDuration = db.prepare(`UPDATE tracks SET duration = ? WHERE id = ?`);
 
 const updateTrackDisplayName = db.prepare(`
   UPDATE tracks 
@@ -289,6 +293,7 @@ module.exports = {
   getAllTracks,
   getTrackById,
   updateTrackPeaks,
+  updateTrackDuration,
   updateTrackDisplayName,
   insertTag,
   getTagByName,
