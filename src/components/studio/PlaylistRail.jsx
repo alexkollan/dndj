@@ -167,11 +167,8 @@ function PlaylistItem({ playlist, isSelected, depth, onSelect, onRename, onDelet
           )}
           <button
             className="pl-item__btn pl-item__btn--del"
-            title="Delete"
-            onClick={e => {
-              e.stopPropagation();
-              if (window.confirm(`Delete "${playlist.name}"?`)) onDelete(playlist.id);
-            }}
+            title={`Delete "${playlist.name}"`}
+            onClick={e => { e.stopPropagation(); onDelete(playlist.id); }}
           >×</button>
         </div>
       </div>
@@ -184,13 +181,25 @@ function PlaylistItem({ playlist, isSelected, depth, onSelect, onRename, onDelet
 function PlaylistRail({ playlists, selectedPlaylistId, onSelect, onLibrarySelect, onRefresh, allTracks }) {
   const [menu, setMenu] = useState(false);
   const [smartEditor, setSmartEditor] = useState(null); // null | 'new' | playlist object
+  const [creating, setCreating] = useState(null); // null | { type: 'manual' | 'folder' }
+  const [newName, setNewName] = useState('');
+  const newNameInputRef = useRef(null);
 
-  const createPlaylist = async (type) => {
-    const defaultName = type === 'folder' ? 'New Folder' : type === 'smart' ? 'Smart Playlist' : 'New Playlist';
-    const name = window.prompt(`${type === 'folder' ? 'Folder' : 'Playlist'} name:`, defaultName);
-    if (!name?.trim()) return;
-    await window.dndj.createPlaylist(name.trim(), null, type, null);
-    onRefresh();
+  const startCreate = (type) => {
+    setCreating({ type });
+    setNewName(type === 'folder' ? 'New Folder' : 'New Playlist');
+    setMenu(false);
+  };
+
+  useEffect(() => {
+    if (creating) newNameInputRef.current?.select();
+  }, [creating]);
+
+  const confirmCreate = async () => {
+    const name = newName.trim();
+    if (name) await window.dndj.createPlaylist(name, null, creating.type, null);
+    setCreating(null);
+    if (name) onRefresh();
   };
 
   const handleSmartSave = async ({ name, rulesJson }) => {
@@ -255,8 +264,8 @@ function PlaylistRail({ playlists, selectedPlaylistId, onSelect, onLibrarySelect
           <button className="pl-create-btn" onClick={() => setMenu(m => !m)} title="New…">+</button>
           {menu && (
             <div className="pl-create-menu" onMouseLeave={() => setMenu(false)}>
-              <button onClick={() => { createPlaylist('manual'); setMenu(false); }}>Manual Playlist</button>
-              <button onClick={() => { createPlaylist('folder'); setMenu(false); }}>Folder</button>
+              <button onClick={() => startCreate('manual')}>Manual Playlist</button>
+              <button onClick={() => startCreate('folder')}>Folder</button>
               <button onClick={() => { setSmartEditor('new'); setMenu(false); }}>Smart Playlist</button>
             </div>
           )}
@@ -266,7 +275,24 @@ function PlaylistRail({ playlists, selectedPlaylistId, onSelect, onLibrarySelect
       {/* Tree */}
       <div className="pl-tree">
         {roots.map(pl => renderTree(pl))}
-        {roots.length === 0 && (
+        {/* Inline new-playlist input */}
+        {creating && (
+          <div className="pl-item pl-item--creating">
+            <span className="pl-item__icon">{creating.type === 'folder' ? '📁' : '♪'}</span>
+            <input
+              ref={newNameInputRef}
+              className="pl-item__rename"
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              onBlur={confirmCreate}
+              onKeyDown={e => {
+                if (e.key === 'Enter') confirmCreate();
+                if (e.key === 'Escape') setCreating(null);
+              }}
+            />
+          </div>
+        )}
+        {roots.length === 0 && !creating && (
           <p className="pl-empty">No playlists yet.<br />Click + to create one.</p>
         )}
       </div>
