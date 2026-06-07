@@ -166,7 +166,8 @@ creation), tags, and target format (mp3/ogg/original). See
 [YouTube Pipeline](./09-youtube-pipeline.md).
 
 ## `LibrarySettingsModal.jsx`
-Tabbed dialog: **CategoriesTab** (CRUD category meta + create folder),
+Tabbed dialog: **CategoriesTab** (CRUD category meta + create folder + **delete
+category** with a move-tracks/delete-tracks flow via `deleteCategory`),
 **TagsTab** (CRUD tags), **ShortcutsTab** (static reference), **SyncTab** (server
 toggle, DuckDNS, saved connection chips, pull with progress — see
 [Sync System](./10-sync-system.md)). Shares a `ColorPicker` swatch grid.

@@ -22,12 +22,30 @@ For each category you can set:
 You can also:
 
 - **+ New** — create a brand-new category. This *creates the folder on disk* too,
-  ready for you to drop files into (or import YouTube tracks into).
+  ready for you to drop files into (or import tracks into).
 - **✎ Edit** — change an existing category's display name or colour.
-- **× Remove metadata** — only available for a category with **no tracks**; clears
-  its custom name/colour (it doesn't delete files).
+- **🗑 Delete** — delete the category (see below).
 
 Each row shows how many tracks are in that category.
+
+### Deleting a category
+
+Click the **🗑** on any category:
+
+- **If it's empty** — DNDj confirms, then removes the folder from disk and the
+  category's metadata.
+- **If it has tracks** — DNDj warns you how many, and asks what to do with them:
+  - **Move them to another category** — pick an existing one or create a new one
+    (name + colour) on the spot. The track files are moved there and everything
+    (tags, playlists, cue points, scenes) is preserved. Then the old category is
+    removed.
+  - **⚠ Delete the tracks and their files** — permanently removes those tracks,
+    their files on disk, and every reference to them (playlists, folders, scenes,
+    tags, cue points).
+
+Either way the category folder is deleted from disk, and the change **syncs** to
+your other machine on the next pull (moved files relocate there too; deleted files
+are removed there).
 
 ## Tags tab
 

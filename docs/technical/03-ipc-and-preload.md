@@ -83,6 +83,7 @@ a flat API at **`window.dndj`**. Every method is a thin wrapper around
 | `upsertCategoryMeta(folderName, displayName, color)` | `upsert-category-meta` | — |
 | `createCategory(folderName, displayName, color)` | `create-category` | **Creates folder on disk** + meta |
 | `deleteCategoryMeta(folderName)` | `delete-category-meta` | Meta only (no file deletion) |
+| `deleteCategory(folder, opts)` | `delete-category` | Delete a category. `opts.action`: `move` (relocate tracks to `opts.target`) or `delete` (remove tracks + files). Removes folder + queues sync deletions. Returns all tracks |
 
 ### YouTube (request + event)
 | Method | Channel | Notes |

@@ -176,7 +176,9 @@ You can give each category a **friendly display name** and a **colour** in
 
 - Rename `atmos` to "Atmosphere", colour it emerald green.
 - Create a brand-new category (which also creates the folder on disk).
-- Categories with no tracks can have their metadata removed.
+- **Delete a category** (🗑) — even one that has tracks: you choose to move its
+  tracks elsewhere or delete them with their files. See
+  [Settings → Deleting a category](./12-settings.md#deleting-a-category).
 
 See [Settings](./12-settings.md#categories-tab) for the full walkthrough.
 
