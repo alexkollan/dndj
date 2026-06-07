@@ -108,8 +108,8 @@ Good to know:
 
 - If a file with that exact name already exists in the folder, DNDj adds a small
   suffix so nothing gets overwritten.
-- If the track is currently **playing on a deck**, the rename may fail because the
-  file is in use — stop it first, then rename.
+- If the track is loaded on a deck or sampler pad, DNDj **automatically unloads it
+  first** so the rename always goes through — you don't have to stop anything.
 - Renames **sync correctly** to your other machine: on the next pull, the renamed
   file is copied across and the old-named file is cleaned up automatically (see
   [Syncing Two Machines](./10-sync.md)).

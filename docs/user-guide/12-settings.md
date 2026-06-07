@@ -45,7 +45,8 @@ Click the **🗑** on any category:
 
 Either way the category folder is deleted from disk, and the change **syncs** to
 your other machine on the next pull (moved files relocate there too; deleted files
-are removed there).
+are removed there). Any tracks loaded on a deck or pad are unloaded automatically
+first, so you don't need to stop playback.
 
 ## Tags tab
 

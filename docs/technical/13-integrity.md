@@ -120,6 +120,29 @@ The top-bar **🩺** button runs `runHealthCheck`: refresh the library, then
 `integrityCheck()`, then show `<IntegrityModal mode="report" …>`. Its **Clean up**
 calls `integrityCleanup()` and refreshes tracks, playlists, and category meta.
 
+## Filesystem ↔ DB consistency guarantee
+
+Every operation that changes a file on disk (rename, move-to-category,
+delete-track, delete-category) follows two rules so the database can **never** drift
+from the filesystem:
+
+1. **Release first (renderer).** Before calling the mutating IPC, the renderer runs
+   `audioEngine.releaseTrackPaths(paths)`, which stops and fully unloads any
+   deck/sampler/preview voice pointing at those files (emitting `deckCleared` so the
+   deck UI clears), then waits ~60 ms for the OS to drop the file handles. This
+   prevents Windows `EBUSY` locks from playback.
+2. **Filesystem-first (main).** The DB row is updated/deleted **only after** the
+   on-disk move/delete has succeeded:
+   - `delete-track` / `move-track-to-category` / `rename-track` throw before any DB
+     write if the file op fails — the DB is left untouched.
+   - `delete-category` does this per track and collects a `failed[]`; the category
+     folder + metadata are removed only if `failed` is empty. The handler returns
+     `{ tracks, failed }` so the UI can report partial results.
+
+Because the DB is the *slave* of a successful filesystem change, an unforeseen lock
+or exception can at worst **abort** an operation cleanly — it can't produce an
+orphaned row (file gone, row kept) or a resurrected track (row gone, file kept).
+
 ## Related reliability mechanisms
 
 - **Soft "missing" flag** — the scanner's [mark-and-sweep](./08-library-scanner.md)

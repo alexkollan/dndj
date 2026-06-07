@@ -66,9 +66,11 @@ category/format/missing flag, but never clobbers the display name. (The scanner'
 1. Derives a filesystem-safe filename from the new display name (illegal chars
    replaced, length-capped) keeping the original extension; if that filename
    already exists it appends a `_<timestamp>` suffix to avoid clobbering.
-2. `fs.renameSync`s the file within its category folder. If the file is open (e.g.
-   loaded on a playing deck) this can throw `EBUSY`; the handler surfaces a clear
-   error telling the user to stop it first.
+2. `fs.renameSync`s the file within its category folder. The renderer first calls
+   `audioEngine.releaseTrackPaths` to unload the track from any deck/sampler/preview
+   voice (dropping the OS handle), so this normally succeeds even mid-playback. If
+   it still can't (locked), the handler throws **before** any DB change — the DB is
+   never left out of sync (see [Integrity → consistency guarantee](./13-integrity.md#filesystem-db-consistency-guarantee)).
 3. Updates the track's `path` **and** `name` in the DB.
 4. Queues the **old path** in `sync_deletions` so a pull on another device removes
    the orphaned old-named file there (the renamed file arrives via the normal
