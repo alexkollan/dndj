@@ -11,6 +11,10 @@ online.
 > **Use responsibly.** Only download content you have the right to use, and
 > respect creators' licences and YouTube's terms.
 
+> Looking to import **local** files, folders, or a `.zip` instead? That's the
+> separate **⬇ Import** button — see
+> [Importing tracks](./03-library-and-tracks.md#importing-tracks-files-folders-zip).
+
 ## One-time setup
 
 YouTube import relies on a small helper tool called **yt-dlp**. The first time you

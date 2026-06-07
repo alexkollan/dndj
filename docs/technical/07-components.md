@@ -33,7 +33,8 @@ App.jsx
     ├── LibrarySettingsModal    (on demand)
     │   └── CategoriesTab, TagsTab, ShortcutsTab, SyncTab
     ├── DocsModal               (on demand — top-bar ?)
-    └── IntegrityModal          (on demand — top-bar 🩺; also launch gate in App.jsx)
+    ├── IntegrityModal          (on demand — top-bar 🩺; also launch gate in App.jsx)
+    └── (TracklistPanel) ImportDialog   (on demand — tracklist ⬇ Import)
 ```
 
 ---
@@ -187,8 +188,19 @@ The DB↔filesystem health dialog. Two modes via the `mode` prop:
 - **`report`** — on-demand, opened by the top-bar **🩺** button in `StudioLayout`;
   shows "all good" or the same issue list with an optional **Clean up**.
 
-Both call `integrityCheck` / `integrityCleanup`. See
-[Integrity & Reliability](./13-integrity.md).
+Both call `integrityCheck` / `integrityCleanup`. Each missing item also offers a
+**🔗 Locate** button (`onRelinkTrack` / `onRelinkCategory`) to re-point it instead
+of deleting. See [Integrity & Reliability](./13-integrity.md).
+
+## `ImportDialog.jsx`
+Rendered by [`TracklistPanel`](#tracklistpaneljsx) (the **⬇ Import** button).
+Stage machine `pick → map → importing → done`. **pick** calls `importPick(files|
+folder|zip)`; **map** groups the returned items by source folder and lets the user
+assign each group to an existing/new category (+ colour), add group tags, and
+expand to rename/skip/override individual tracks; **commit** builds `mappings` +
+`newCategories` and calls `importCommit`, then refreshes the library via
+`onImported`. Closing before commit calls `importCancel` to clean up. See
+[Import Pipeline](./14-import.md).
 
 ---
 

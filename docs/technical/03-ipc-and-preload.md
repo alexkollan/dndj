@@ -98,10 +98,21 @@ a flat API at **`window.dndj`**. Every method is a thin wrapper around
 |--------|---------|-------|
 | `integrityCheck()` | `integrity:check` | Read-only DB↔disk delta: `{ ok, missingCategories, missingTracks, scannedAt }` (tracks include per-link `links`) |
 | `integrityCleanup()` | `integrity:cleanup` | Transactionally removes missing entries everywhere; returns `{ result, tracks }` |
+| `relinkTrack(trackId)` | `integrity:relink-track` | Opens a file picker; re-points a missing track at the chosen file (keeps refs). Returns `{ relinked, tracks }` |
+| `relinkCategory(folder)` | `integrity:relink-category` | Opens a folder picker; re-links a missing category's tracks by filename. Returns `{ relinked, tracks }` |
 | `quitApp()` | `app:quit` | Quits the app (used by the launch cleanup gate's "Quit") |
 
-See [Library Scanner](./08-library-scanner.md) and the
+See [Integrity & Reliability](./13-integrity.md) and the
 [integrity module](../../src/integrity.js).
+
+### Import (files / folder / zip)
+| Method | Channel | Notes |
+|--------|---------|-------|
+| `importPick(kind)` | `import:pick` | `kind` ∈ `files`\|`folder`\|`zip`. Opens a dialog, stages discovered audio. Returns `{ canceled?, stagingId, items:[{id,folder,filename,suggestedName,ext}] }` |
+| `importCommit({stagingId, mappings, newCategories})` | `import:commit` | Copies staged files into `sounds/<category>/`, creates categories, inserts tracks. Returns `{ result, tracks }` |
+| `importCancel(stagingId)` | `import:cancel` | Discards a staging session (and any temp zip extraction) |
+
+See [Import Pipeline](./14-import.md).
 
 ### Documentation viewer
 | Method | Channel | Notes |

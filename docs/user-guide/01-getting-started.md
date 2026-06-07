@@ -64,6 +64,10 @@ To add audio:
 > them friendly category names and colours, move them between categories, and tag
 > them — all from inside the app. See [Library & Tracks](./03-library-and-tracks.md).
 
+> **Prefer not to touch the folders yourself?** Use the **⬇ Import** button inside
+> the app to bring in files, a whole folder, or a `.zip` and map them to categories
+> as they come in. See [Importing tracks](./03-library-and-tracks.md#importing-tracks-files-folders-zip).
+
 ### Supported formats
 
 MP3 · OGG · WAV · WebM · M4A · AAC · FLAC · Opus

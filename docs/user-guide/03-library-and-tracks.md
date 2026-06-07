@@ -24,6 +24,33 @@ afterwards without touching the file.
 > A track you delete from disk but haven't re-scanned is marked *missing* and
 > hidden from the library — it won't clutter your list.
 
+## Importing tracks (files, folders, .zip)
+
+Besides dropping files into `sounds/` by hand, you can bring audio in from
+anywhere with the **⬇ Import** button in the tracklist toolbar. It copies the
+files into your library for you and lets you sort them into categories as they come
+in. (For pulling audio off YouTube, see [YouTube Import](./09-youtube-import.md).)
+
+Click **⬇ Import** and choose:
+
+- **Audio files** — pick one or more individual files.
+- **A folder** — DNDj looks through it (and its subfolders) for audio.
+- **A .zip** — same, but reads inside the archive.
+
+Then you get a **mapping screen**. Your tracks are grouped by the folder they came
+from, and for each group you decide where it lands:
+
+- **Pick a category** — choose an **existing** one, or flip to **New** and type a
+  name and pick a colour to create one on the fly (just like the YouTube importer).
+- **Add tags** — type tags to apply to everything in that group.
+- **Fine-tune** — expand a group to rename individual tracks, untick any you don't
+  want, or send a single track to a different category.
+
+Click **Import** and the files are copied into the right category folders, named
+after their labels, and added to your library. This is the easiest way to bring in
+a big sound pack that's organised into subfolders — each subfolder becomes (or maps
+to) a category in one pass.
+
 ## Finding tracks
 
 The toolbar above the list gives you three filters that combine:
@@ -107,20 +134,29 @@ window appears *before* the Studio loads. It lists:
 - **Missing tracks** — individual files that are gone, and **where each was
   linked** (which playlists, folders, scenes, tags, and how many cue points).
 
-To keep everything consistent you then click **Clean up & continue**, which
-removes those dead entries from *everywhere* they appear (playlists, folders,
-scenes, tags, cue points). If something looks wrong — for example an external
-drive isn't plugged in — click **Quit app** instead, fix it, and relaunch.
+For each missing item you have two choices:
+
+- **🔗 Locate** — point it at the file (or folder) on disk. Use this when you
+  simply **renamed or moved** something: pick the actual file and DNDj re-links it,
+  keeping **all** its tags, playlist spots, cue points, and scene assignments. For
+  a missing category, pick the renamed folder and every track inside is re-linked
+  by filename. Once everything is located, the launch window closes on its own.
+- **Clean up & continue** — remove the dead entries from *everywhere* they appear
+  (playlists, folders, scenes, tags, cue points). Use this when the files really
+  are gone for good.
+
+If something looks wrong — for example an external drive isn't plugged in — click
+**Quit app** instead, fix it, and relaunch.
 
 ### Any time — the 🩺 button
 The **🩺 health-check button** in the top bar runs the same check on demand and
 shows a report: either *"Everything checks out"* or the same missing-items list,
-with a **Clean up** button. Use it whenever you've been reorganising files on disk
-and want to tidy the database.
+with the same **🔗 Locate** and **Clean up** options. Use it whenever you've been
+reorganising files on disk and want to reconcile the database.
 
-> **Tip:** deleting from *inside* the app (the row's 🗑) keeps everything in sync
-> automatically, so you'll rarely need the cleanup — it's there for when files
-> change behind the app's back.
+> **Tip:** renaming, moving, or deleting from *inside* the app keeps everything in
+> sync automatically, so you'll rarely need this — it's the safety net for when
+> files change behind the app's back.
 
 ## Categories
 
