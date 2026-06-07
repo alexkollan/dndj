@@ -70,6 +70,24 @@ function App() {
     setIntegrityReport(null); // proceed into the Studio
   }, []);
 
+  // Re-check after a relink; if everything is resolved, drop the gate.
+  const recheckIntegrity = useCallback(async () => {
+    const report = await window.dndj.integrityCheck();
+    setIntegrityReport(report.ok ? null : report);
+  }, []);
+
+  const handleRelinkTrack = useCallback(async (trackId) => {
+    const res = await window.dndj.relinkTrack(trackId);
+    if (res?.tracks) setAllTracks(res.tracks);
+    await recheckIntegrity();
+  }, [recheckIntegrity]);
+
+  const handleRelinkCategory = useCallback(async (folder) => {
+    const res = await window.dndj.relinkCategory(folder);
+    if (res?.tracks) setAllTracks(res.tracks);
+    await recheckIntegrity();
+  }, [recheckIntegrity]);
+
   const handleQuit = useCallback(() => window.dndj.quitApp(), []);
 
   const handleMasterVolume = useCallback((vol) => {
@@ -116,6 +134,8 @@ function App() {
         mode="launch"
         report={integrityReport}
         onCleanup={handleIntegrityCleanup}
+        onRelinkTrack={handleRelinkTrack}
+        onRelinkCategory={handleRelinkCategory}
         onQuit={handleQuit}
       />
     );

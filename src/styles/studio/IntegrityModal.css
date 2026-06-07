@@ -141,6 +141,22 @@
   border-radius: var(--radius-full);
   padding: 0 var(--s-2);
 }
+.integ-locate {
+  margin-left: var(--s-2);
+  flex-shrink: 0;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  color: var(--accent);
+  background: var(--accent-muted);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-sm);
+  padding: 2px var(--s-2);
+  cursor: pointer;
+  transition: all var(--t-fast);
+}
+.integ-locate:hover:not(:disabled) { background: var(--accent); color: var(--text-on-accent); }
+.integ-locate:disabled { opacity: 0.5; cursor: default; }
+
 .integ-card__tracks {
   display: flex;
   flex-wrap: wrap;

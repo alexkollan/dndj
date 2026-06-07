@@ -32,15 +32,16 @@ function TrackLinks({ links }) {
  * Props: { mode, report, onCleanup, onClose, onQuit }
  *   report === null → still scanning (report mode only)
  */
-export default function IntegrityModal({ mode, report, onCleanup, onClose, onQuit }) {
+export default function IntegrityModal({ mode, report, onCleanup, onClose, onQuit, onRelinkTrack, onRelinkCategory }) {
   const [busy, setBusy] = useState(false);
   const isLaunch = mode === 'launch';
 
-  const handleCleanup = async () => {
+  const runAction = async (fn) => {
     setBusy(true);
-    try { await onCleanup(); }
+    try { await fn(); }
     finally { setBusy(false); }
   };
+  const handleCleanup = () => runAction(onCleanup);
 
   const loading = report === null;
   const hasIssues = report && !report.ok;
@@ -77,10 +78,11 @@ export default function IntegrityModal({ mode, report, onCleanup, onClose, onQui
             <>
               <p className="integ-intro">
                 {isLaunch
-                  ? 'Some files referenced by your library are missing from disk. To keep everything consistent, these entries must be removed before continuing.'
-                  : 'These library entries point to files that no longer exist on disk.'}
-                {' '}Cleaning up removes them from <strong>all</strong> playlists, folders, scenes,
-                tags and cue points.
+                  ? 'Some files referenced by your library are missing from disk. To continue, either point each item at its file/folder with '
+                  : 'These library entries point to files that no longer exist on disk. You can point each one at its file/folder with '}
+                <strong>🔗 Locate</strong> (keeps all tags, playlists, scenes and cue points — use this if you
+                just renamed or moved it), or <strong>clean up</strong> to remove the dead entries from
+                everywhere they appear.
               </p>
 
               {report.missingCategories.length > 0 && (
@@ -95,6 +97,14 @@ export default function IntegrityModal({ mode, report, onCleanup, onClose, onQui
                         <span className="integ-card__name">{cat.displayName}</span>
                         <span className="integ-card__sub">{cat.folder}/ — folder not found</span>
                         <span className="integ-card__badge">{cat.trackCount} track{cat.trackCount !== 1 ? 's' : ''}</span>
+                        {onRelinkCategory && (
+                          <button
+                            className="integ-locate"
+                            disabled={busy}
+                            onClick={() => runAction(() => onRelinkCategory(cat.folder))}
+                            title="Point this category at its folder on disk"
+                          >🔗 Locate folder</button>
+                        )}
                       </div>
                       {cat.tracks.length > 0 && (
                         <div className="integ-card__tracks">
@@ -117,6 +127,14 @@ export default function IntegrityModal({ mode, report, onCleanup, onClose, onQui
                         <span className="integ-card__icon">♪</span>
                         <span className="integ-card__name">{t.name}</span>
                         <span className="integ-card__sub">{t.path}</span>
+                        {onRelinkTrack && (
+                          <button
+                            className="integ-locate"
+                            disabled={busy}
+                            onClick={() => runAction(() => onRelinkTrack(t.id))}
+                            title="Point this track at its file on disk (e.g. if you renamed it)"
+                          >🔗 Locate file</button>
+                        )}
                       </div>
                       <TrackLinks links={t.links} />
                     </div>

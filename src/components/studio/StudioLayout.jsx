@@ -235,6 +235,21 @@ function StudioLayout({
     setHealthReport(report);
   }, [onTracksChange, loadPlaylists, loadCategoryMeta]);
 
+  const handleHealthRelinkTrack = useCallback(async (trackId) => {
+    const res = await window.dndj.relinkTrack(trackId);
+    if (res?.tracks) onTracksChange?.(res.tracks);
+    await loadPlaylists();
+    setHealthReport(await window.dndj.integrityCheck());
+  }, [onTracksChange, loadPlaylists]);
+
+  const handleHealthRelinkCategory = useCallback(async (folder) => {
+    const res = await window.dndj.relinkCategory(folder);
+    if (res?.tracks) onTracksChange?.(res.tracks);
+    await loadPlaylists();
+    await loadCategoryMeta();
+    setHealthReport(await window.dndj.integrityCheck());
+  }, [onTracksChange, loadPlaylists, loadCategoryMeta]);
+
   // ── Load tracks for selected playlist ───────────────────────────────────────
   const loadPlaylistTracks = useCallback(async (id) => {
     if (id == null) { setPlaylistTracks([]); return; }
@@ -717,6 +732,8 @@ function StudioLayout({
           mode="report"
           report={healthReport}
           onCleanup={handleHealthCleanup}
+          onRelinkTrack={handleHealthRelinkTrack}
+          onRelinkCategory={handleHealthRelinkCategory}
           onClose={() => setHealthOpen(false)}
         />
       )}
