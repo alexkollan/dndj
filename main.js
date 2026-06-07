@@ -48,7 +48,10 @@ const SOUNDS_DIR = path.join(__dirname, 'sounds');
 try {
   require('electron-reloader')(module, {
     watchRenderer: true,
-    ignore: [/data/, /dndj\.sqlite/]
+    // Ignore: DB files (written on every scan), audio assets, and compiled output.
+    // Without ignoring sounds/, Windows ReadDirectoryChangesW fires on fs.readdirSync
+    // → chokidar detects a change → renderer reloads → scan runs again → infinite loop.
+    ignore: [/data/, /dndj\.sqlite/, /sounds/, /dist/]
   });
 } catch (_) { /* not installed — ignore */ }
 
