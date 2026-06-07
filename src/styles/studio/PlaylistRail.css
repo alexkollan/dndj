@@ -122,6 +122,72 @@
 .pl-item__btn:hover { color: var(--text-primary); background: var(--bg-card); }
 .pl-item__btn--del:hover { color: var(--danger); }
 
+/* ── Drag handle (visual only — drag is from whole item) ── */
+.pl-item__drag-handle {
+  flex-shrink: 0;
+  color: var(--text-disabled);
+  font-size: 11px;
+  padding: 0 1px;
+  line-height: 1;
+  pointer-events: none;
+  transition: color var(--t-fast);
+}
+.pl-item:hover .pl-item__drag-handle { color: var(--text-muted); }
+
+/* ── Track item inside the tree ── */
+.pl-item--track {
+  cursor: grab;
+  opacity: 0.75;
+}
+.pl-item--track:hover { opacity: 1; }
+.pl-item--track:active { cursor: grabbing; }
+
+.pl-item__icon--track {
+  font-size: 0.75em;
+  color: var(--text-muted);
+}
+
+.pl-item--track .pl-item__name {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.pl-item--track:hover .pl-item__name { color: var(--text-secondary); }
+
+/* ── Collapse caret ── */
+.pl-item__caret {
+  flex-shrink: 0;
+  width: 12px;
+  font-size: 8px;
+  color: var(--text-muted);
+  cursor: default;
+  text-align: center;
+}
+.pl-item__caret--active { cursor: pointer; }
+.pl-item__caret--active:hover { color: var(--text-primary); }
+
+/* ── Dragging state ── */
+.pl-item--dragging {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+/* ── Drop-into highlight (folder target) ── */
+.pl-item--drop-into {
+  background: rgba(16, 185, 129, 0.12) !important;
+  outline: 1px dashed var(--accent);
+  outline-offset: -1px;
+}
+
+/* ── Insertion line (before / after) ── */
+.pl-insert-line {
+  height: 2px;
+  background: var(--accent);
+  border-radius: var(--radius-full);
+  margin: 1px var(--s-2);
+  box-shadow: 0 0 6px var(--accent-glow);
+  flex-shrink: 0;
+}
+
 /* ── Tree nesting ── */
 .pl-group { display: flex; flex-direction: column; }
 

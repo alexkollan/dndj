@@ -10,9 +10,9 @@ import '../../styles/studio/DeckPanel.css';
 
 const CUE_COLORS = ['#10b981', '#f59e0b', '#818cf8', '#ef4444', '#22d3ee', '#fb923c', '#a78bfa', '#4ade80'];
 
-const DECK_LABELS = { A: 'DECK A', B: 'DECK B' };
-const DECK_COLORS = { A: 'var(--deck-a-color)', B: 'var(--deck-b-color)' };
-const DECK_ACCENT_CLASS = { A: 'deck--a', B: 'deck--b' };
+const DECK_LABELS = { A: 'DECK A', B: 'DECK B', C: 'DECK C' };
+const DECK_COLORS = { A: 'var(--deck-a-color)', B: 'var(--deck-b-color)', C: 'var(--deck-c-color)' };
+const DECK_ACCENT_CLASS = { A: 'deck--a', B: 'deck--b', C: 'deck--c' };
 
 function formatTime(sec) {
   if (!sec || !isFinite(sec) || sec < 0) return '0:00';
@@ -21,8 +21,8 @@ function formatTime(sec) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-function DeckPanel({ deckId, track, url, isPlaying, isPaused }) {
-  const droppableId = `deck-${deckId}`;
+function DeckPanel({ deckId, track, url, isPlaying, isPaused, droppableId: droppableIdProp }) {
+  const droppableId = droppableIdProp || `deck-${deckId}`;
   const { isOver, setNodeRef } = useDroppable({ id: droppableId });
 
   const [volume, setVolume] = useState(0.8);

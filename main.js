@@ -173,6 +173,21 @@ app.whenReady().then(() => {
 
   createWindow();
 
+  // Auto-start sync server if it was enabled when the app was last closed
+  const syncEnabledRow = dbManager.getSetting.get('sync_server_enabled');
+  if (syncEnabledRow && JSON.parse(syncEnabledRow.value)) {
+    const tokenRow = dbManager.getSetting.get('sync_token');
+    if (tokenRow) {
+      const token = JSON.parse(tokenRow.value);
+      syncServer.startServer({ token, port: SYNC_PORT, soundsDir: SOUNDS_DIR, dbPath: DB_PATH });
+      const ddDomainRow = dbManager.getSetting.get('sync_duckdns_domain');
+      const ddTokenRow = dbManager.getSetting.get('sync_duckdns_token');
+      if (ddDomainRow && ddTokenRow) {
+        duckdns.startUpdater(JSON.parse(ddDomainRow.value), JSON.parse(ddTokenRow.value));
+      }
+    }
+  }
+
   // macOS: re-create the window when the dock icon is clicked and no windows exist
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -635,6 +650,90 @@ ipcMain.handle('youtube-import', async (_, { url, category = 'youtube', displayN
 
   ytSend({ phase: 'done', trackId });
   return dbManager.getAllTracks.all();
+});
+
+// ─── Sync ────────────────────────────────────────────────────────────────────
+
+const crypto = require('crypto');
+const syncServer = require('./src/sync/syncServer');
+const duckdns = require('./src/sync/duckdns');
+const { pullFromServer } = require('./src/sync/syncClient');
+
+const SYNC_PORT = 7432;
+const DB_PATH = path.join(__dirname, 'data', 'dndj.sqlite');
+
+function getOrCreateSyncToken() {
+  const row = dbManager.getSetting.get('sync_token');
+  if (row) return JSON.parse(row.value);
+  const token = crypto.randomBytes(4).toString('hex');
+  dbManager.setSetting.run('sync_token', JSON.stringify(token));
+  return token;
+}
+
+ipcMain.handle('sync:start-server', () => {
+  const token = getOrCreateSyncToken();
+  const info = syncServer.startServer({ token, port: SYNC_PORT, soundsDir: SOUNDS_DIR, dbPath: DB_PATH });
+  dbManager.setSetting.run('sync_server_enabled', JSON.stringify(true));
+
+  const ddDomainRow = dbManager.getSetting.get('sync_duckdns_domain');
+  const ddTokenRow = dbManager.getSetting.get('sync_duckdns_token');
+  if (ddDomainRow && ddTokenRow) {
+    duckdns.startUpdater(JSON.parse(ddDomainRow.value), JSON.parse(ddTokenRow.value));
+  }
+
+  return { ...info, token };
+});
+
+ipcMain.handle('sync:stop-server', () => {
+  syncServer.stopServer();
+  duckdns.stopUpdater();
+  dbManager.setSetting.run('sync_server_enabled', JSON.stringify(false));
+});
+
+ipcMain.handle('sync:server-status', () => {
+  const running = syncServer.isRunning();
+  if (!running) return { running: false };
+  const token = getOrCreateSyncToken();
+  return {
+    running: true,
+    info: { port: SYNC_PORT, localIp: syncServer.getLocalIp(), token },
+    duckdns: duckdns.getStatus(),
+  };
+});
+
+ipcMain.handle('sync:update-duckdns', async (_e, { domain, token }) => {
+  dbManager.setSetting.run('sync_duckdns_domain', JSON.stringify(domain));
+  dbManager.setSetting.run('sync_duckdns_token', JSON.stringify(token));
+  duckdns.startUpdater(domain, token);
+  const ok = await duckdns.updateOnce(domain, token);
+  return { ok };
+});
+
+ipcMain.handle('sync:pull', async (_e, { serverUrl, token }) => {
+  const send = data => mainWindow?.webContents.send('sync-progress', data);
+  try {
+    const { tempDbPath, filesDownloaded } = await pullFromServer({
+      serverUrl,
+      token,
+      soundsDir: SOUNDS_DIR,
+      dbPath: DB_PATH,
+      onProgress: send,
+    });
+
+    send({ phase: 'finalizing', text: 'Applying database...' });
+    dbManager.db.close();
+    if (fs.existsSync(tempDbPath)) {
+      if (fs.existsSync(DB_PATH)) fs.unlinkSync(DB_PATH);
+      fs.renameSync(tempDbPath, DB_PATH);
+    }
+
+    send({ phase: 'done', text: `Sync complete — ${filesDownloaded} file(s) updated. Restarting...` });
+    setTimeout(() => { app.relaunch(); app.exit(0); }, 2000);
+    return { ok: true };
+  } catch (err) {
+    send({ phase: 'error', text: err.message });
+    return { ok: false, error: err.message };
+  }
 });
 
 ipcMain.handle('get-audio-url', (_event, relativePath) => {

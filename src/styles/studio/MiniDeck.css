@@ -1,0 +1,250 @@
+/* MiniDeck.css — Deck C: collapsed mini bar + expanded modal */
+
+/* ── Mini bar ────────────────────────────────────────────────────────────── */
+.mini-deck {
+  width: 100%;
+  background: var(--bg-card);
+  border: 1px solid rgba(129, 140, 248, 0.15);
+  border-radius: var(--radius-lg);
+  padding: var(--s-2) var(--s-2);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  transition: border-color var(--t-fast), box-shadow var(--t-fast), background var(--t-fast);
+  user-select: none;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.mini-deck:hover {
+  border-color: var(--deck-c-color);
+  background: var(--bg-card-hover);
+}
+
+.mini-deck--playing {
+  border-color: var(--deck-c-color);
+  box-shadow: 0 0 0 1px var(--deck-c-color), 0 0 10px var(--deck-c-glow);
+}
+
+.mini-deck--over {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+.mini-deck--empty {
+  opacity: 0.6;
+}
+
+/* ── Header row ──────────────────────────────────────────────────────────── */
+.mini-deck__header {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1-5);
+  min-width: 0;
+}
+
+.mini-deck__badge {
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-black);
+  letter-spacing: 0.1em;
+  color: var(--deck-c-color);
+  flex-shrink: 0;
+}
+
+.mini-deck__name {
+  flex: 1;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.mini-deck--empty .mini-deck__name {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: var(--text-2xs);
+}
+
+.mini-deck__playing-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--deck-c-color);
+  flex-shrink: 0;
+  animation: mini-deck-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes mini-deck-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.25; }
+}
+
+/* ── Progress row ────────────────────────────────────────────────────────── */
+.mini-deck__progress-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1-5);
+}
+
+.mini-deck__time {
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-bold);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.mini-deck__progress {
+  flex: 1;
+  height: 3px;
+  background: var(--border-subtle);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.mini-deck__progress-fill {
+  height: 100%;
+  background: var(--deck-c-color);
+  border-radius: var(--radius-full);
+  transition: width 0.1s linear;
+}
+
+/* ── Controls row ────────────────────────────────────────────────────────── */
+.mini-deck__controls {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+}
+
+.mini-deck__btn {
+  padding: 1px var(--s-1-5);
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.5;
+  cursor: pointer;
+  transition: all var(--t-fast);
+}
+
+.mini-deck__btn:hover {
+  border-color: var(--deck-c-color);
+  color: var(--deck-c-color);
+}
+
+.mini-deck__btn--active {
+  background: rgba(129, 140, 248, 0.12);
+  border-color: var(--deck-c-color);
+  color: var(--deck-c-color);
+}
+
+.mini-deck__expand-btn {
+  margin-left: auto;
+  padding: 1px var(--s-1-5);
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: all var(--t-fast);
+}
+
+.mini-deck__expand-btn:hover {
+  border-color: var(--deck-c-color);
+  color: var(--deck-c-color);
+}
+
+/* ── Modal backdrop ──────────────────────────────────────────────────────── */
+.mini-deck-modal__backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-overlay);
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+  animation: mini-deck-backdrop-in 0.15s ease-out;
+}
+
+@keyframes mini-deck-backdrop-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── Modal card ──────────────────────────────────────────────────────────── */
+.mini-deck-modal {
+  width: min(620px, 90vw);
+  height: min(460px, 85vh);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-sidebar);
+  border: 1px solid rgba(129, 140, 248, 0.30);
+  border-radius: var(--radius-xl);
+  box-shadow:
+    0 0 0 1px var(--deck-c-color),
+    0 24px 64px rgba(0, 0, 0, 0.65),
+    0 0 40px var(--deck-c-glow);
+  overflow: hidden;
+  animation: mini-deck-modal-in 0.15s ease-out;
+}
+
+@keyframes mini-deck-modal-in {
+  from { transform: translateY(10px) scale(0.97); opacity: 0; }
+  to   { transform: translateY(0)    scale(1);    opacity: 1; }
+}
+
+/* ── Modal header ────────────────────────────────────────────────────────── */
+.mini-deck-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s-2) var(--s-3);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.mini-deck-modal__title {
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-black);
+  letter-spacing: 0.14em;
+  color: var(--deck-c-color);
+}
+
+.mini-deck-modal__close {
+  padding: var(--s-1) var(--s-2);
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: 1;
+  cursor: pointer;
+  transition: all var(--t-fast);
+}
+
+.mini-deck-modal__close:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* ── Modal body — hosts the full DeckPanel ───────────────────────────────── */
+.mini-deck-modal__body {
+  flex: 1;
+  min-height: 0;
+  padding: var(--s-3);
+  display: flex;
+  flex-direction: column;
+}
+
+.mini-deck-modal__body .deck-panel {
+  flex: 1;
+  height: auto;
+}

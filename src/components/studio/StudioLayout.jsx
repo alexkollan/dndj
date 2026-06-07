@@ -16,12 +16,34 @@ import PlaylistRail, { evaluateSmartPlaylist } from './PlaylistRail.jsx';
 import LibrarySettingsModal from './LibrarySettingsModal.jsx';
 import TracklistPanel from './TracklistPanel.jsx';
 import DeckPanel from './DeckPanel.jsx';
+import MiniDeck from './MiniDeck.jsx';
 import Crossfader from './Crossfader.jsx';
 import SamplerStrip from './SamplerStrip.jsx';
 import ScenePanel from './ScenePanel.jsx';
 import '../../styles/studio/StudioLayout.css';
 
 const INIT_DECK_STATE = { isPlaying: false, isPaused: false };
+
+// Returns true if ancestorId equals candidateId or is any ancestor of it
+function isAncestorOrSelf(playlists, ancestorId, candidateId) {
+  if (ancestorId === candidateId) return true;
+  let node = playlists.find(p => p.id === candidateId);
+  while (node?.parent_id != null) {
+    if (node.parent_id === ancestorId) return true;
+    node = playlists.find(p => p.id === node.parent_id);
+  }
+  return false;
+}
+
+function computeDropPosition(pointerY, rect, isFolder) {
+  if (isFolder) {
+    const third = rect.height / 3;
+    if (pointerY < rect.top + third) return 'before';
+    if (pointerY > rect.bottom - third) return 'after';
+    return 'into';
+  }
+  return pointerY < rect.top + rect.height / 2 ? 'before' : 'after';
+}
 
 function StudioLayout({
   masterVolume, onMasterVolume, onStopAll,
@@ -51,11 +73,13 @@ function StudioLayout({
   const [playlistFlash, setPlaylistFlash] = useState(null); // { playlistId, key } — triggers drop animation
 
   // Deck state
-  const [deckTracks, setDeckTracks] = useState({ A: null, B: null }); // { track, url } | null
-  const [deckState, setDeckState] = useState({ A: INIT_DECK_STATE, B: INIT_DECK_STATE });
+  const [deckTracks, setDeckTracks] = useState({ A: null, B: null, C: null }); // { track, url } | null
+  const [deckState, setDeckState] = useState({ A: INIT_DECK_STATE, B: INIT_DECK_STATE, C: INIT_DECK_STATE });
 
   const samplerRef = useRef(null);
   const activeDeckRef = useRef('A'); // tracks the last-played deck for keyboard shortcuts
+  const pointerYRef = useRef(0);
+  const [playlistDropIndicator, setPlaylistDropIndicator] = useState(null);
   const [samplerKey, setSamplerKey] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [crossfaderKey, setCrossfaderKey] = useState(0);
@@ -65,6 +89,13 @@ function StudioLayout({
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
 
+  // ── Track pointer Y for playlist drop-position detection ───────────────────
+  useEffect(() => {
+    const onMove = (e) => { pointerYRef.current = e.clientY; };
+    window.addEventListener('pointermove', onMove);
+    return () => window.removeEventListener('pointermove', onMove);
+  }, []);
+
   // ── Subscribe to deck engine events ────────────────────────────────────────
   useEffect(() => {
     const unsub = subscribe((event, data) => {
@@ -72,7 +103,7 @@ function StudioLayout({
       if (!id) return;
       if (event === 'deckStarted') {
         setDeckState(prev => ({ ...prev, [id]: { isPlaying: true, isPaused: false } }));
-        activeDeckRef.current = id;
+        if (id !== 'C') activeDeckRef.current = id;
       } else if (event === 'deckPaused') {
         setDeckState(prev => ({ ...prev, [id]: { isPlaying: false, isPaused: true } }));
       } else if (event === 'deckStopped' || event === 'deckEnded') {
@@ -244,7 +275,7 @@ function StudioLayout({
     }
     stopDeck('A');
     stopDeck('B');
-    setDeckState({ A: INIT_DECK_STATE, B: INIT_DECK_STATE });
+    setDeckState(prev => ({ ...prev, A: INIT_DECK_STATE, B: INIT_DECK_STATE }));
 
     for (const [deckId, key] of [['A', 'deckA'], ['B', 'deckB']]) {
       const snap = snapshot[key];
@@ -345,18 +376,88 @@ function StudioLayout({
 
   // ── DnD handlers ─────────────────────────────────────────────────────────────
   const handleDragStart = useCallback(({ active }) => {
-    setActiveDrag({ id: active.id, name: active.data.current?.trackName || String(active.id) });
+    setActiveDrag({
+      id: active.id,
+      name: active.data.current?.trackName || active.data.current?.playlistName || String(active.id),
+    });
   }, []);
+
+  const handleDragMove = useCallback(({ active, over }) => {
+    if (active.data.current?.type !== 'playlist') { setPlaylistDropIndicator(null); return; }
+    if (!over || !String(over.id).startsWith('playlist-')) { setPlaylistDropIndicator(null); return; }
+    const targetId = parseInt(String(over.id).replace('playlist-', ''), 10);
+    const draggedId = active.data.current.playlistId;
+    if (targetId === draggedId) { setPlaylistDropIndicator(null); return; }
+    const rect = over.rect;
+    if (!rect) { setPlaylistDropIndicator(null); return; }
+    const target = playlists.find(p => p.id === targetId);
+    const position = computeDropPosition(pointerYRef.current, rect, target?.type === 'folder');
+    setPlaylistDropIndicator({ targetId, position });
+  }, [playlists]);
 
   const handleDragEnd = useCallback(async ({ active, over }) => {
     setActiveDrag(null);
+    setPlaylistDropIndicator(null);
+
+    // ── Playlist reorganization ──────────────────────────────────────────────
+    if (active.data.current?.type === 'playlist') {
+      if (!over || !String(over.id).startsWith('playlist-')) return;
+      const targetId = parseInt(String(over.id).replace('playlist-', ''), 10);
+      const draggedId = active.data.current.playlistId;
+      if (draggedId === targetId) return;
+
+      const dragged = playlists.find(p => p.id === draggedId);
+      const target  = playlists.find(p => p.id === targetId);
+      if (!dragged || !target) return;
+
+      // Guard circular nesting
+      if (isAncestorOrSelf(playlists, draggedId, targetId)) return;
+
+      const rect = over.rect;
+      if (!rect) return;
+      const position = computeDropPosition(pointerYRef.current, rect, target.type === 'folder');
+
+      if (position === 'into') {
+        // Move dragged to end of target folder's children
+        const existingKids = playlists.filter(p => p.parent_id === targetId && p.id !== draggedId);
+        await window.dndj.updatePlaylist(draggedId, dragged.name, targetId, dragged.rules_json, existingKids.length);
+      } else {
+        // Reorder within target's parent level
+        const newParentId = target.parent_id;
+        if (newParentId !== null && isAncestorOrSelf(playlists, draggedId, newParentId)) return;
+
+        const siblings = playlists
+          .filter(p => p.parent_id === newParentId && p.id !== draggedId)
+          .sort((a, b) => a.sort_order - b.sort_order);
+
+        const targetIdx = siblings.findIndex(p => p.id === targetId);
+        const insertIdx = position === 'before' ? targetIdx : targetIdx + 1;
+        const newOrder = [...siblings];
+        newOrder.splice(insertIdx, 0, dragged);
+
+        await Promise.all(newOrder.map((pl, i) => {
+          const newParent = pl.id === draggedId ? newParentId : pl.parent_id;
+          const changed = pl.id === draggedId
+            ? (pl.parent_id !== newParentId || pl.sort_order !== i)
+            : pl.sort_order !== i;
+          return changed
+            ? window.dndj.updatePlaylist(pl.id, pl.name, newParent, pl.rules_json, i)
+            : Promise.resolve();
+        }));
+      }
+
+      await loadPlaylists();
+      return;
+    }
+
     if (!over) return;
 
     const overId = String(over.id);
     const trackId = active.data.current?.trackId;
 
-    if (overId === 'deck-A' || overId === 'deck-B') {
-      const deckId = overId === 'deck-A' ? 'A' : 'B';
+    if (overId === 'deck-A' || overId === 'deck-B' || overId === 'deck-C' || overId === 'deck-C-full') {
+      const deckMap = { 'deck-A': 'A', 'deck-B': 'B', 'deck-C': 'C', 'deck-C-full': 'C' };
+      const deckId = deckMap[overId];
       const track = allTracks.find(t => t.id === trackId);
       if (track) await handleLoadToDeck(deckId, track);
     } else if (overId.startsWith('pad-')) {
@@ -384,7 +485,7 @@ function StudioLayout({
         }
       }
     }
-  }, [selectedPlaylistId, isReorderable, playlistTracks, loadPlaylistTracks, allTracks, handleLoadToDeck]);
+  }, [selectedPlaylistId, isReorderable, playlistTracks, loadPlaylistTracks, allTracks, handleLoadToDeck, playlists, loadPlaylists]);
 
   return (
     <DndContext
@@ -394,6 +495,7 @@ function StudioLayout({
         return pointer.length > 0 ? pointer : rectIntersection(args);
       }}
       onDragStart={handleDragStart}
+      onDragMove={handleDragMove}
       onDragEnd={handleDragEnd}
     >
       <div className="studio">
@@ -437,6 +539,7 @@ function StudioLayout({
                 onRefresh={loadPlaylists}
                 allTracks={allTracks || []}
                 dropFlash={playlistFlash}
+                dropIndicator={playlistDropIndicator}
               />
             </div>
             <div className="studio__rail-divider" />
@@ -477,10 +580,18 @@ function StudioLayout({
                   onMouseDown={startDeckSplitResize}
                   title="Drag to resize decks"
                 />
-                <Crossfader
-                  key={crossfaderKey}
-                  initialPos={crossfaderInit.pos}
-                  initialCurve={crossfaderInit.curve}
+                <div className="studio__crossfader-center">
+                  <Crossfader
+                    key={crossfaderKey}
+                    initialPos={crossfaderInit.pos}
+                    initialCurve={crossfaderInit.curve}
+                  />
+                </div>
+                <MiniDeck
+                  track={deckTracks.C?.track ?? null}
+                  url={deckTracks.C?.url ?? null}
+                  isPlaying={deckState.C.isPlaying}
+                  isPaused={deckState.C.isPaused}
                 />
               </div>
 

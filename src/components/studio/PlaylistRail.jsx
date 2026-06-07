@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { useDroppable } from '@dnd-kit/core';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useDroppable, useDraggable } from '@dnd-kit/core';
 import '../../styles/studio/PlaylistRail.css';
 
 // ─── Smart Playlist Rule Evaluator ───────────────────────────────────────────
@@ -113,15 +113,52 @@ function SmartEditor({ playlist, onSave, onClose }) {
   );
 }
 
-// ─── Droppable Playlist Item ──────────────────────────────────────────────────
-function PlaylistItem({ playlist, isSelected, depth, onSelect, onRename, onDelete, onEditSmart, dropFlashKey, children }) {
-  const { isOver, setNodeRef } = useDroppable({ id: `playlist-${playlist.id}` });
+// ─── Track item inside the tree ───────────────────────────────────────────────
+function TrackTreeItem({ track, depth }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `tree-track-${track.id}`,
+    data: { trackId: track.id, trackName: track.name },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`pl-item pl-item--track ${isDragging ? 'pl-item--dragging' : ''}`}
+      style={{ paddingLeft: `calc(var(--s-2) + ${depth * 14}px)` }}
+      title={track.name}
+      {...attributes}
+      {...listeners}
+    >
+      <span className="pl-item__icon pl-item__icon--track">♩</span>
+      <span className="pl-item__name">{track.name}</span>
+    </div>
+  );
+}
+
+// ─── Playlist Item ────────────────────────────────────────────────────────────
+function PlaylistItem({
+  playlist, isSelected, depth,
+  onSelect, onRename, onDelete, onEditSmart,
+  dropFlashKey, dropIndicator,
+  isCollapsed, hasChildren, onToggleCollapse,
+  children,
+}) {
+  const { isOver, setNodeRef: setDropRef } = useDroppable({ id: `playlist-${playlist.id}` });
+  const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
+    id: `pl-drag-${playlist.id}`,
+    data: { type: 'playlist', playlistId: playlist.id, playlistName: playlist.name },
+  });
+
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(playlist.name);
   const [flash, setFlash] = useState(false);
   const inputRef = useRef(null);
 
-  // Trigger the drop-success flash animation whenever a new drop key arrives
+  const setItemRef = useCallback((el) => {
+    setDropRef(el);
+    setDragRef(el);
+  }, [setDropRef, setDragRef]);
+
   useEffect(() => {
     if (!dropFlashKey) return;
     setFlash(true);
@@ -139,7 +176,10 @@ function PlaylistItem({ playlist, isSelected, depth, onSelect, onRename, onDelet
     setEditing(false);
   }, [editName, playlist.id, playlist.name, onRename]);
 
-  const icon = playlist.type === 'folder'
+  const isFolder = playlist.type === 'folder';
+  const indicatorPos = dropIndicator?.targetId === playlist.id ? dropIndicator.position : null;
+
+  const icon = isFolder
     ? (
       <svg className="pl-icon-svg" viewBox="0 0 16 14" fill="currentColor">
         <path d="M1 2.5A1.5 1.5 0 012.5 1H6a1 1 0 01.707.293L8.414 3H13.5A1.5 1.5 0 0115 4.5v7A1.5 1.5 0 0113.5 13h-11A1.5 1.5 0 011 11.5V2.5z"/>
@@ -148,20 +188,50 @@ function PlaylistItem({ playlist, isSelected, depth, onSelect, onRename, onDelet
     : playlist.type === 'smart' ? '✦' : '♪';
 
   return (
-    <div className="pl-group" style={{ paddingLeft: depth * 12 }}>
+    <div className="pl-group">
+      {indicatorPos === 'before' && (
+        <div className="pl-insert-line" style={{ marginLeft: depth * 14 + 8 }} />
+      )}
       <div
-        ref={setNodeRef}
-        className={`pl-item ${isSelected ? 'pl-item--selected' : ''} ${isOver ? 'pl-item--over' : ''} ${flash ? 'pl-item--drop-flash' : ''}`}
+        ref={setItemRef}
+        className={[
+          'pl-item',
+          isSelected              ? 'pl-item--selected'   : '',
+          (isOver && !isDragging) ? 'pl-item--over'       : '',
+          flash                   ? 'pl-item--drop-flash' : '',
+          indicatorPos === 'into' ? 'pl-item--drop-into'  : '',
+          isDragging              ? 'pl-item--dragging'   : '',
+        ].filter(Boolean).join(' ')}
+        style={{ paddingLeft: `calc(var(--s-2) + ${depth * 14}px)`, cursor: 'grab' }}
         onClick={() => !editing && onSelect(playlist.id)}
         onDoubleClick={() => { setEditing(true); setEditName(playlist.name); }}
+        {...attributes}
+        {...listeners}
       >
+        {/* Visual grip indicator — listeners are on the whole item */}
+        <span className="pl-item__drag-handle" aria-hidden>⠿</span>
+
+        {/* Collapse caret for folders with children */}
+        {isFolder && (
+          <span
+            className={`pl-item__caret ${hasChildren ? 'pl-item__caret--active' : ''}`}
+            onPointerDown={e => e.stopPropagation()}
+            onClick={hasChildren ? (e) => { e.stopPropagation(); onToggleCollapse(playlist.id); } : undefined}
+            title={hasChildren ? (isCollapsed ? 'Expand' : 'Collapse') : undefined}
+          >
+            {hasChildren ? (isCollapsed ? '▶' : '▼') : ''}
+          </span>
+        )}
+
         <span className="pl-item__icon">{icon}</span>
+
         {editing ? (
           <input
             ref={inputRef}
             className="pl-item__rename"
             value={editName}
             onChange={e => setEditName(e.target.value)}
+            onPointerDown={e => e.stopPropagation()}
             onBlur={confirmRename}
             onKeyDown={e => {
               if (e.key === 'Enter') confirmRename();
@@ -172,7 +242,11 @@ function PlaylistItem({ playlist, isSelected, depth, onSelect, onRename, onDelet
         ) : (
           <span className="pl-item__name" title={playlist.name}>{playlist.name}</span>
         )}
-        <div className="pl-item__actions">
+
+        <div
+          className="pl-item__actions"
+          onPointerDown={e => e.stopPropagation()}
+        >
           {playlist.type === 'smart' && (
             <button
               className="pl-item__btn"
@@ -187,18 +261,63 @@ function PlaylistItem({ playlist, isSelected, depth, onSelect, onRename, onDelet
           >×</button>
         </div>
       </div>
-      {children}
+
+      {indicatorPos === 'after' && (
+        <div className="pl-insert-line" style={{ marginLeft: depth * 14 + 8 }} />
+      )}
+
+      {!isCollapsed && children}
     </div>
   );
 }
 
 // ─── PlaylistRail ─────────────────────────────────────────────────────────────
-function PlaylistRail({ playlists, selectedPlaylistId, onSelect, onLibrarySelect, onRefresh, allTracks, dropFlash }) {
+function PlaylistRail({
+  playlists, selectedPlaylistId,
+  onSelect, onLibrarySelect, onRefresh,
+  allTracks, dropFlash, dropIndicator,
+}) {
   const [menu, setMenu] = useState(false);
-  const [smartEditor, setSmartEditor] = useState(null); // null | 'new' | playlist object
-  const [creating, setCreating] = useState(null); // null | { type: 'manual' | 'folder' }
+  const [smartEditor, setSmartEditor] = useState(null);
+  const [creating, setCreating] = useState(null);
   const [newName, setNewName] = useState('');
   const newNameInputRef = useRef(null);
+  const [collapsedFolders, setCollapsedFolders] = useState(new Set());
+
+  // Tracks stored inside each playlist/folder, keyed by playlist id
+  const [playlistTracks, setPlaylistTracksCache] = useState({});
+
+  const loadTracksFor = useCallback(async (playlistId) => {
+    try {
+      const tracks = await window.dndj.getPlaylistTracks(playlistId);
+      setPlaylistTracksCache(prev => ({ ...prev, [playlistId]: tracks || [] }));
+    } catch { /* ignore */ }
+  }, []);
+
+  // Load tracks for all non-smart playlists on mount and whenever the playlist list changes
+  useEffect(() => {
+    playlists
+      .filter(p => p.type !== 'smart')
+      .forEach(p => loadTracksFor(p.id));
+  }, [playlists, loadTracksFor]);
+
+  // Reload the specific playlist that just received a dropped track
+  useEffect(() => {
+    if (dropFlash?.playlistId) loadTracksFor(dropFlash.playlistId);
+  }, [dropFlash, loadTracksFor]);
+
+  const toggleCollapse = useCallback((id) => {
+    setCollapsedFolders(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+        loadTracksFor(id); // refresh tracks on expand
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, [loadTracksFor]);
 
   const startCreate = (type) => {
     setCreating({ type });
@@ -240,28 +359,48 @@ function PlaylistRail({ playlists, selectedPlaylistId, onSelect, onLibrarySelect
     onRefresh();
   };
 
-  const roots = playlists.filter(p => p.parent_id == null);
-  const childrenOf = (id) => playlists.filter(p => p.parent_id === id);
-
-  const renderTree = (pl, depth = 0) => (
-    <PlaylistItem
-      key={pl.id}
-      playlist={pl}
-      isSelected={selectedPlaylistId === pl.id}
-      depth={depth}
-      onSelect={onSelect}
-      onRename={handleRename}
-      onDelete={handleDelete}
-      onEditSmart={setSmartEditor}
-      dropFlashKey={dropFlash?.playlistId === pl.id ? dropFlash.key : null}
-    >
-      {childrenOf(pl.id).map(child => renderTree(child, depth + 1))}
-    </PlaylistItem>
+  const childrenOf = useCallback(
+    (id) => playlists.filter(p => p.parent_id === id).sort((a, b) => a.sort_order - b.sort_order),
+    [playlists],
   );
+
+  const roots = useMemo(
+    () => playlists.filter(p => p.parent_id == null).sort((a, b) => a.sort_order - b.sort_order),
+    [playlists],
+  );
+
+  const renderTree = (pl, depth = 0) => {
+    const isCollapsed = collapsedFolders.has(pl.id);
+    const kids = childrenOf(pl.id);
+    const tracks = pl.type !== 'smart' ? (playlistTracks[pl.id] || []) : [];
+    const hasVisibleChildren = kids.length > 0 || tracks.length > 0;
+
+    return (
+      <PlaylistItem
+        key={pl.id}
+        playlist={pl}
+        isSelected={selectedPlaylistId === pl.id}
+        depth={depth}
+        onSelect={onSelect}
+        onRename={handleRename}
+        onDelete={handleDelete}
+        onEditSmart={setSmartEditor}
+        dropFlashKey={dropFlash?.playlistId === pl.id ? dropFlash.key : null}
+        dropIndicator={dropIndicator}
+        isCollapsed={isCollapsed}
+        hasChildren={hasVisibleChildren}
+        onToggleCollapse={toggleCollapse}
+      >
+        {kids.map(child => renderTree(child, depth + 1))}
+        {tracks.map(track => (
+          <TrackTreeItem key={`t-${track.id}`} track={track} depth={depth + 1} />
+        ))}
+      </PlaylistItem>
+    );
+  };
 
   return (
     <div className="playlist-rail">
-      {/* My Library root */}
       <div
         className={`pl-item pl-item--library ${selectedPlaylistId === null ? 'pl-item--selected' : ''}`}
         onClick={onLibrarySelect}
@@ -273,7 +412,6 @@ function PlaylistRail({ playlists, selectedPlaylistId, onSelect, onLibrarySelect
 
       <div className="pl-divider" />
 
-      {/* Section header */}
       <div className="pl-section-header">
         <span>PLAYLISTS</span>
         <div className="pl-create-wrap">
@@ -288,10 +426,8 @@ function PlaylistRail({ playlists, selectedPlaylistId, onSelect, onLibrarySelect
         </div>
       </div>
 
-      {/* Tree */}
       <div className="pl-tree">
         {roots.map(pl => renderTree(pl))}
-        {/* Inline new-playlist input */}
         {creating && (
           <div className="pl-item pl-item--creating">
             <span className="pl-item__icon">
@@ -319,7 +455,6 @@ function PlaylistRail({ playlists, selectedPlaylistId, onSelect, onLibrarySelect
         )}
       </div>
 
-      {/* Smart playlist editor modal */}
       {smartEditor && (
         <SmartEditor
           playlist={smartEditor === 'new' ? null : smartEditor}

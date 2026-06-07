@@ -17,9 +17,11 @@
 
 .deck--a.deck-panel { border-color: rgba(16, 185, 129, 0.2); }
 .deck--b.deck-panel { border-color: rgba(245, 158, 11, 0.2); }
+.deck--c.deck-panel { border-color: rgba(129, 140, 248, 0.2); }
 
 .deck--a.deck-panel--playing { box-shadow: 0 0 0 1px var(--deck-a-color), 0 0 12px rgba(16, 185, 129, 0.15); border-color: var(--deck-a-color); }
 .deck--b.deck-panel--playing { box-shadow: 0 0 0 1px var(--deck-b-color), 0 0 12px rgba(245, 158, 11, 0.15); border-color: var(--deck-b-color); }
+.deck--c.deck-panel--playing { box-shadow: 0 0 0 1px var(--deck-c-color), 0 0 12px var(--deck-c-glow); border-color: var(--deck-c-color); }
 
 .deck-panel--over { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-glow); }
 .deck-panel--empty { opacity: 0.65; }

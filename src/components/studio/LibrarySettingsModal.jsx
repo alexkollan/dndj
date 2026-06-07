@@ -352,6 +352,203 @@ function ShortcutsTab() {
   );
 }
 
+// ─── Sync Tab ─────────────────────────────────────────────────────────────────
+
+function SyncTab() {
+  const [serverRunning, setServerRunning] = useState(false);
+  const [serverInfo, setServerInfo] = useState(null);
+  const [ddDomain, setDdDomain] = useState('');
+  const [ddApiToken, setDdApiToken] = useState('');
+  const [ddSaved, setDdSaved] = useState(false);
+  const [serverUrl, setServerUrl] = useState('');
+  const [clientToken, setClientToken] = useState('');
+  const [pullState, setPullState] = useState({ phase: 'idle' });
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    async function load() {
+      const status = await window.dndj.syncServerStatus();
+      setServerRunning(status.running);
+      if (status.running) setServerInfo(status.info);
+
+      const savedDomain = await window.dndj.getSetting('sync_duckdns_domain');
+      const savedDdToken = await window.dndj.getSetting('sync_duckdns_token');
+      if (savedDomain) setDdDomain(savedDomain);
+      if (savedDdToken) setDdApiToken(savedDdToken);
+
+      const savedUrl = await window.dndj.getSetting('sync_client_url');
+      const savedCToken = await window.dndj.getSetting('sync_client_token');
+      if (savedUrl) {
+        setServerUrl(savedUrl);
+      } else if (status.running && status.info) {
+        setServerUrl(`http://${status.info.localIp}:${status.info.port}`);
+      }
+      if (savedCToken) setClientToken(savedCToken);
+    }
+    load();
+    window.dndj.onSyncProgress(data => setPullState(data));
+    return () => window.dndj.offSyncProgress();
+  }, []);
+
+  async function toggleServer() {
+    if (serverRunning) {
+      await window.dndj.syncStopServer();
+      setServerRunning(false);
+      setServerInfo(null);
+    } else {
+      const info = await window.dndj.syncStartServer();
+      setServerRunning(true);
+      setServerInfo(info);
+      setServerUrl(prev => prev || `http://${info.localIp}:${info.port}`);
+    }
+  }
+
+  async function saveDuckDns() {
+    const result = await window.dndj.syncUpdateDuckDns({ domain: ddDomain, token: ddApiToken });
+    setDdSaved(result.ok);
+    setTimeout(() => setDdSaved(false), 2500);
+  }
+
+  async function startPull() {
+    await window.dndj.setSetting('sync_client_url', serverUrl);
+    await window.dndj.setSetting('sync_client_token', clientToken);
+    setPullState({ phase: 'starting', text: 'Starting...' });
+    await window.dndj.syncPull({ serverUrl, token: clientToken });
+  }
+
+  function copyToken() {
+    if (!serverInfo?.token) return;
+    navigator.clipboard.writeText(serverInfo.token);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  const isPulling = !['idle', 'done', 'error'].includes(pullState.phase);
+  const isDone = pullState.phase === 'done';
+  const isError = pullState.phase === 'error';
+  const pullPct = (pullState.phase === 'files' && pullState.total > 0)
+    ? Math.round((pullState.done / pullState.total) * 100) : null;
+
+  return (
+    <div className="ls-tab-content ls-sync">
+      {/* ── Server section ── */}
+      <div className="ls-section-head">
+        <span className="ls-section-title">Server Mode</span>
+        <button
+          className={`ls-btn ls-btn--sm ${serverRunning ? 'ls-btn--danger' : 'ls-btn--primary'}`}
+          onClick={toggleServer}
+        >
+          {serverRunning ? 'Stop Server' : 'Start Server'}
+        </button>
+      </div>
+
+      {!serverRunning && (
+        <p className="ls-sync-hint">
+          Start the server on this machine so another device running DNDj can pull your library from it.
+        </p>
+      )}
+
+      {serverRunning && serverInfo && (
+        <div className="ls-sync-server-info">
+          <div className="ls-sync-dot" />
+          <div className="ls-sync-info-rows">
+            <div className="ls-sync-info-row">
+              <span className="ls-sync-label">Local</span>
+              <code className="ls-sync-value">http://{serverInfo.localIp}:{serverInfo.port}</code>
+            </div>
+            <div className="ls-sync-info-row">
+              <span className="ls-sync-label">Token</span>
+              <code className="ls-sync-value">{serverInfo.token}</code>
+              <button className="ls-icon-btn" onClick={copyToken} title="Copy token">
+                {copied ? '✓' : '⎘'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {serverRunning && (
+        <>
+          <div className="ls-section-head" style={{ marginTop: '16px' }}>
+            <span className="ls-section-title">DuckDNS — WAN Access</span>
+          </div>
+          <p className="ls-sync-hint">
+            Keeps <strong>{ddDomain || 'your-domain'}.duckdns.org</strong> pointed at this machine's public IP every 30 min so your Mac can reach it from anywhere.
+          </p>
+          <div className="ls-sync-duckdns">
+            <input
+              className="ls-input"
+              placeholder="Domain name (e.g. akpchome)"
+              value={ddDomain}
+              onChange={e => setDdDomain(e.target.value)}
+            />
+            <input
+              className="ls-input"
+              placeholder="DuckDNS API token (from duckdns.org)"
+              value={ddApiToken}
+              onChange={e => setDdApiToken(e.target.value)}
+            />
+            <button
+              className={`ls-btn ${ddSaved ? 'ls-btn--success' : 'ls-btn--primary'}`}
+              onClick={saveDuckDns}
+              disabled={!ddDomain.trim() || !ddApiToken.trim()}
+            >
+              {ddSaved ? 'Updated ✓' : 'Save & Update Now'}
+            </button>
+          </div>
+        </>
+      )}
+
+      <div className="ls-divider-line" />
+
+      {/* ── Client section ── */}
+      <div className="ls-section-head">
+        <span className="ls-section-title">Pull from Server</span>
+      </div>
+      <p className="ls-sync-hint">
+        Connect to another machine running DNDj in server mode. Everything on that machine (database + audio files) will be downloaded to this device. The app will restart when complete.
+      </p>
+      <div className="ls-sync-client">
+        <input
+          className="ls-input"
+          placeholder="http://192.168.1.103:7432"
+          value={serverUrl}
+          onChange={e => setServerUrl(e.target.value)}
+          disabled={isPulling}
+        />
+        <input
+          className="ls-input"
+          placeholder="Auth token (shown on the server machine)"
+          value={clientToken}
+          onChange={e => setClientToken(e.target.value)}
+          disabled={isPulling}
+        />
+        <button
+          className="ls-btn ls-btn--primary"
+          onClick={startPull}
+          disabled={isPulling || !serverUrl.trim() || !clientToken.trim()}
+        >
+          {isPulling ? 'Syncing…' : 'Pull from Server'}
+        </button>
+      </div>
+
+      {pullState.phase !== 'idle' && (
+        <div className={`ls-sync-progress ${isError ? 'ls-sync-progress--error' : ''} ${isDone ? 'ls-sync-progress--done' : ''}`}>
+          {pullPct !== null && (
+            <div className="ls-sync-bar">
+              <div className="ls-sync-bar-fill" style={{ width: `${pullPct}%` }} />
+            </div>
+          )}
+          <span className="ls-sync-progress-text">
+            {pullState.text || pullState.phase}
+            {pullPct !== null && ` — ${pullState.done}/${pullState.total}`}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Modal shell ──────────────────────────────────────────────────────────────
 
 export default function LibrarySettingsModal({ allTracks, tags, onClose, onRefresh, onTagsChange, onCategoryMetaChange }) {
@@ -368,11 +565,13 @@ export default function LibrarySettingsModal({ allTracks, tags, onClose, onRefre
           <button className={`ls-tab ${tab === 'categories' ? 'ls-tab--active' : ''}`} onClick={() => setTab('categories')}>Categories</button>
           <button className={`ls-tab ${tab === 'tags' ? 'ls-tab--active' : ''}`} onClick={() => setTab('tags')}>Tags</button>
           <button className={`ls-tab ${tab === 'shortcuts' ? 'ls-tab--active' : ''}`} onClick={() => setTab('shortcuts')}>Shortcuts</button>
+          <button className={`ls-tab ${tab === 'sync' ? 'ls-tab--active' : ''}`} onClick={() => setTab('sync')}>Sync</button>
         </div>
         <div className="ls-dialog__body">
           {tab === 'categories' && <CategoriesTab allTracks={allTracks} onRefresh={onRefresh} onCategoryMetaChange={onCategoryMetaChange} />}
           {tab === 'tags' && <TagsTab tags={tags} onTagsChange={onTagsChange} />}
           {tab === 'shortcuts' && <ShortcutsTab />}
+          {tab === 'sync' && <SyncTab />}
         </div>
       </div>
     </div>

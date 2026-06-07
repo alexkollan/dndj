@@ -157,6 +157,8 @@
   /* ─── Component-specific ─────────────────────────────────────────────────── */
   --deck-a-color:   var(--color-emerald);
   --deck-b-color:   var(--color-amber);
+  --deck-c-color:   #818cf8;  /* Violet — hidden/ambient Deck C */
+  --deck-c-glow:    rgba(129, 140, 248, 0.20);
   --pad-size:       80px;
   --waveform-color-low:  #3b82f6; /* Blue  — bass   */
   --waveform-color-mid:  #10b981; /* Green — mids   */

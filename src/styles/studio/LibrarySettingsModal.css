@@ -353,3 +353,138 @@
   color: #9ca3af;
   flex: 1;
 }
+
+/* ── Button variants ─────────────────────────────────────────────────────────── */
+.ls-btn--sm { padding: 4px 10px; font-size: 11px; }
+.ls-btn--danger { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
+.ls-btn--danger:hover { background: rgba(239, 68, 68, 0.25); }
+.ls-btn--success { background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); }
+.ls-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ── Sync Tab ─────────────────────────────────────────────────────────────────── */
+.ls-sync { gap: 10px; }
+
+.ls-sync-hint {
+  font-size: 11px;
+  color: #6b7280;
+  line-height: 1.6;
+  margin: 0;
+}
+.ls-sync-hint strong { color: #9ca3af; }
+
+.ls-sync-server-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: rgba(16, 185, 129, 0.06);
+  border: 1px solid rgba(16, 185, 129, 0.18);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.ls-sync-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  margin-top: 4px;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+  animation: sync-dot-pulse 2s ease-in-out infinite;
+}
+@keyframes sync-dot-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+.ls-sync-info-rows { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 0; }
+
+.ls-sync-info-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ls-sync-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b7280;
+  min-width: 38px;
+  flex-shrink: 0;
+}
+
+.ls-sync-value {
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  color: #d1d5db;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 6px;
+  border-radius: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.ls-sync-duckdns {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ls-sync-client {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ls-divider-line {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  margin: 4px 0;
+  flex-shrink: 0;
+}
+
+.ls-sync-progress {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ls-sync-progress--error {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+.ls-sync-progress--done {
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.25);
+}
+
+.ls-sync-bar {
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.ls-sync-bar-fill {
+  height: 100%;
+  background: #10b981;
+  border-radius: 99px;
+  transition: width 0.2s ease;
+}
+
+.ls-sync-progress-text {
+  font-size: 11px;
+  color: #9ca3af;
+}
+.ls-sync-progress--error .ls-sync-progress-text { color: #ef4444; }
+.ls-sync-progress--done  .ls-sync-progress-text { color: #10b981; }

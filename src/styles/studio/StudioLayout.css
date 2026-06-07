@@ -251,11 +251,20 @@
 .studio__crossfader-zone {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
   gap: var(--s-2);
-  min-width: 140px;
+  min-width: 148px;
   position: relative;
+  padding-top: 20px; /* room for the split handle */
+  padding-bottom: var(--s-2);
+}
+
+/* Wrapper that fills remaining space and centers the crossfader within it */
+.studio__crossfader-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-height: 0;
 }
 
 /* Drag handle at the top of the crossfader zone for resizing decks */
