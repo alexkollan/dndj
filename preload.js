@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 /**
  * contextBridge.exposeInMainWorld
@@ -83,8 +83,11 @@ contextBridge.exposeInMainWorld('dndj', {
 
   // Import (files / folder / zip)
   importPick: (kind) => ipcRenderer.invoke('import:pick', kind),
+  importStagePaths: (paths) => ipcRenderer.invoke('import:stage-paths', paths),
   importCommit: (opts) => ipcRenderer.invoke('import:commit', opts),
   importCancel: (stagingId) => ipcRenderer.invoke('import:cancel', stagingId),
+  // Resolve the absolute filesystem path of a dropped File (Electron 35+)
+  getPathForFile: (file) => webUtils.getPathForFile(file),
 
   // Documentation
   docsList: () => ipcRenderer.invoke('docs:list'),

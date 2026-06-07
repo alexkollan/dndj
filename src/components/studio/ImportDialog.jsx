@@ -7,6 +7,27 @@ const COLORS = ['#10b981', '#34d399', '#f59e0b', '#fbbf24', '#818cf8', '#a78bfa'
 const slug = s => String(s).trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_-]/g, '');
 const titleize = s => String(s).replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/\b\w/g, c => c.toUpperCase());
 
+// Build the default per-group / per-track mapping state for a set of items.
+function makeInitialMapping(items, allCats) {
+  const groups = {}, itemState = {}, byFolder = {};
+  for (const it of items) {
+    (byFolder[it.folder] ||= []).push(it);
+    itemState[it.id] = { include: true, name: it.suggestedName, override: '' };
+  }
+  Object.keys(byFolder).sort().forEach((folder, idx) => {
+    const lastSeg = folder ? folder.split('/').pop() : '';
+    groups[folder] = {
+      mode: (folder === '' && allCats.length) ? 'existing' : 'new',
+      existing: allCats[0] || '',
+      newName: lastSeg ? titleize(lastSeg) : 'Imported',
+      newColor: COLORS[idx % COLORS.length],
+      tags: [], tagInput: '',
+      expanded: Object.keys(byFolder).length <= 1,
+    };
+  });
+  return { groups, itemState };
+}
+
 function ColorDots({ value, onChange }) {
   return (
     <div className="imp-colors">
@@ -18,20 +39,26 @@ function ColorDots({ value, onChange }) {
   );
 }
 
-export default function ImportDialog({ onClose, onImported, existingCategories = [], categoryMeta = [], existingTags = [] }) {
-  const [stage, setStage] = useState(STAGES.PICK);
-  const [stagingId, setStagingId] = useState(null);
-  const [items, setItems] = useState([]);
-  const [groups, setGroups] = useState({});      // folder → { mode, existing, newName, newColor, tags, tagInput, expanded }
-  const [itemState, setItemState] = useState({}); // id → { include, name, override }
-  const [error, setError] = useState('');
-  const [result, setResult] = useState(null);
-
-  const catMetaMap = useMemo(() => Object.fromEntries((categoryMeta || []).map(m => [m.folder_name, m])), [categoryMeta]);
+export default function ImportDialog({ onClose, onImported, existingCategories = [], categoryMeta = [], existingTags = [], initialStaging = null }) {
   const allCats = useMemo(
     () => [...new Set([...(existingCategories || []), ...(categoryMeta || []).map(m => m.folder_name)])].sort(),
     [existingCategories, categoryMeta],
   );
+  // When opened from a drag-and-drop, the files are already staged → start at MAP.
+  const init = useMemo(
+    () => initialStaging ? makeInitialMapping(initialStaging.items, allCats) : { groups: {}, itemState: {} },
+    [], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  const [stage, setStage] = useState(initialStaging ? STAGES.MAP : STAGES.PICK);
+  const [stagingId, setStagingId] = useState(initialStaging?.stagingId ?? null);
+  const [items, setItems] = useState(initialStaging?.items ?? []);
+  const [groups, setGroups] = useState(init.groups);      // folder → { mode, existing, newName, newColor, tags, tagInput, expanded }
+  const [itemState, setItemState] = useState(init.itemState); // id → { include, name, override }
+  const [error, setError] = useState('');
+  const [result, setResult] = useState(null);
+
+  const catMetaMap = useMemo(() => Object.fromEntries((categoryMeta || []).map(m => [m.folder_name, m])), [categoryMeta]);
   const catLabel = (folder) => catMetaMap[folder]?.display_name || folder;
 
   const folders = useMemo(() => {
@@ -46,20 +73,7 @@ export default function ImportDialog({ onClose, onImported, existingCategories =
     if (!res || res.canceled) return;
     if (!res.items || res.items.length === 0) { setError('No audio files found in that selection.'); return; }
 
-    const g = {}, is = {}, byFolder = {};
-    for (const it of res.items) { (byFolder[it.folder] ||= []).push(it); is[it.id] = { include: true, name: it.suggestedName, override: '' }; }
-    Object.keys(byFolder).sort().forEach((folder, idx) => {
-      const lastSeg = folder ? folder.split('/').pop() : '';
-      g[folder] = {
-        mode: (folder === '' && allCats.length) ? 'existing' : 'new',
-        existing: allCats[0] || '',
-        newName: lastSeg ? titleize(lastSeg) : 'Imported',
-        newColor: COLORS[idx % COLORS.length],
-        tags: [],
-        tagInput: '',
-        expanded: Object.keys(byFolder).length <= 1,
-      };
-    });
+    const { groups: g, itemState: is } = makeInitialMapping(res.items, allCats);
     setStagingId(res.stagingId);
     setItems(res.items);
     setGroups(g);

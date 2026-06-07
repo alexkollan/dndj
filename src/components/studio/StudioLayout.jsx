@@ -22,6 +22,7 @@ import SamplerStrip from './SamplerStrip.jsx';
 import ScenePanel from './ScenePanel.jsx';
 import DocsModal from './DocsModal.jsx';
 import IntegrityModal from './IntegrityModal.jsx';
+import ImportDialog from './ImportDialog.jsx';
 import '../../styles/studio/StudioLayout.css';
 
 const INIT_DECK_STATE = { isPlaying: false, isPaused: false };
@@ -87,6 +88,8 @@ function StudioLayout({
   const [docsOpen, setDocsOpen] = useState(false);
   const [healthOpen, setHealthOpen] = useState(false);
   const [healthReport, setHealthReport] = useState(null);
+  const [dropActive, setDropActive] = useState(false);   // external file drag over the window
+  const [dragStaging, setDragStaging] = useState(null);  // { stagingId, items } from a drop
   const [crossfaderKey, setCrossfaderKey] = useState(0);
   const [crossfaderInit, setCrossfaderInit] = useState({ pos: 0.5, curve: 'equal_power' });
 
@@ -100,6 +103,44 @@ function StudioLayout({
     window.addEventListener('pointermove', onMove);
     return () => window.removeEventListener('pointermove', onMove);
   }, []);
+
+  // ── External file drag-and-drop → import ────────────────────────────────────
+  // Only reacts to OS file drags (dataTransfer "Files"); internal @dnd-kit drags
+  // are pointer-based and never trigger these native handlers.
+  useEffect(() => {
+    let depth = 0;
+    const hasFiles = (e) => Array.from(e.dataTransfer?.types || []).includes('Files');
+    const onEnter = (e) => { if (!hasFiles(e)) return; e.preventDefault(); depth++; setDropActive(true); };
+    const onOver  = (e) => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; };
+    const onLeave = (e) => { if (!hasFiles(e)) return; depth = Math.max(0, depth - 1); if (depth === 0) setDropActive(false); };
+    const onDrop = async (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      depth = 0;
+      setDropActive(false);
+      const files = Array.from(e.dataTransfer.files || []);
+      const paths = files.map(f => { try { return window.dndj.getPathForFile(f); } catch { return null; } }).filter(Boolean);
+      if (paths.length === 0) return;
+      // Main classifies: returns no items if nothing supported was dropped → do nothing.
+      const staged = await window.dndj.importStagePaths(paths);
+      if (staged?.items?.length) setDragStaging(staged);
+    };
+    window.addEventListener('dragenter', onEnter);
+    window.addEventListener('dragover', onOver);
+    window.addEventListener('dragleave', onLeave);
+    window.addEventListener('drop', onDrop);
+    return () => {
+      window.removeEventListener('dragenter', onEnter);
+      window.removeEventListener('dragover', onOver);
+      window.removeEventListener('dragleave', onLeave);
+      window.removeEventListener('drop', onDrop);
+    };
+  }, []);
+
+  const importCategories = useMemo(
+    () => [...new Set([...(allTracks || []).map(t => t.category).filter(Boolean), ...categoryMeta.map(m => m.folder_name)])].sort(),
+    [allTracks, categoryMeta],
+  );
 
   // ── Subscribe to deck engine events ────────────────────────────────────────
   useEffect(() => {
@@ -735,6 +776,26 @@ function StudioLayout({
           onRelinkTrack={handleHealthRelinkTrack}
           onRelinkCategory={handleHealthRelinkCategory}
           onClose={() => setHealthOpen(false)}
+        />
+      )}
+
+      {dropActive && (
+        <div className="studio__dropzone">
+          <div className="studio__dropzone-card">
+            <div className="studio__dropzone-icon">⬇</div>
+            <div className="studio__dropzone-text">Drop audio files, a folder, or a .zip to import</div>
+          </div>
+        </div>
+      )}
+
+      {dragStaging && (
+        <ImportDialog
+          initialStaging={dragStaging}
+          onClose={() => setDragStaging(null)}
+          onImported={(tracks) => { if (tracks) onTracksChange?.(tracks); handleLibraryRefresh(); loadPlaylists(); }}
+          existingCategories={importCategories}
+          categoryMeta={categoryMeta}
+          existingTags={tags}
         />
       )}
 

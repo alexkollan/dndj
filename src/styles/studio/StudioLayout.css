@@ -393,3 +393,37 @@
   text-overflow: ellipsis;
   transform: rotate(-2deg);
 }
+
+/* ── External file drag-and-drop overlay ── */
+.studio__dropzone {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-toast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-overlay);
+  backdrop-filter: var(--blur-sm);
+  pointer-events: none;
+  animation: studio-dropzone-in 0.12s ease-out;
+}
+@keyframes studio-dropzone-in { from { opacity: 0; } to { opacity: 1; } }
+.studio__dropzone-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-8) var(--s-10);
+  border: 2px dashed var(--accent-border);
+  border-radius: var(--radius-xl);
+  background: var(--accent-muted);
+}
+.studio__dropzone-icon {
+  font-size: var(--text-4xl);
+  color: var(--accent);
+}
+.studio__dropzone-text {
+  color: var(--text-primary);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}

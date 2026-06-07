@@ -499,55 +499,51 @@ ipcMain.handle('integrity:relink-category', async (_event, oldFolder) => {
 // ─── Import (files / folder / .zip) ────────────────────────────────────────────
 
 const importer = require('./src/importer');
-const importStaging = new Map(); // stagingId → { sources, stagingDir }
+const importStaging = new Map(); // stagingId → { sources, stagingDirs: [tempDirs] }
 
-ipcMain.handle('import:pick', async (_event, kind) => {
-  let sources = [];
-  let stagingDir = null;
+function audioSourcesFromDir(root, base) {
+  // base = the dir that folder paths are relative to (controls the group name)
+  return importer.walkAudio(root).map(abs => ({
+    absPath: abs,
+    folder: path.relative(base, path.dirname(abs)).split(path.sep).join('/'),
+    filename: path.basename(abs),
+  }));
+}
 
-  if (kind === 'files') {
-    const res = await dialog.showOpenDialog(mainWindow, {
-      title: 'Import audio files',
-      properties: ['openFile', 'multiSelections'],
-      filters: [AUDIO_DIALOG_FILTER],
-    });
-    if (res.canceled) return { canceled: true };
-    sources = res.filePaths.map(p => ({ absPath: p, folder: '', filename: path.basename(p) }));
+function extractZip(zipPath) {
+  const AdmZip = require('adm-zip');
+  const dir = path.join(os.tmpdir(), `dndj_import_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+  new AdmZip(zipPath).extractAllTo(dir, true);
+  return dir;
+}
 
-  } else if (kind === 'folder') {
-    const res = await dialog.showOpenDialog(mainWindow, { title: 'Import a folder', properties: ['openDirectory'] });
-    if (res.canceled) return { canceled: true };
-    const root = res.filePaths[0];
-    sources = importer.walkAudio(root).map(abs => ({
-      absPath: abs,
-      folder: path.relative(root, path.dirname(abs)).split(path.sep).join('/'),
-      filename: path.basename(abs),
-    }));
-
-  } else if (kind === 'zip') {
-    const res = await dialog.showOpenDialog(mainWindow, {
-      title: 'Import a .zip', properties: ['openFile'], filters: [{ name: 'Zip archive', extensions: ['zip'] }],
-    });
-    if (res.canceled) return { canceled: true };
-    const AdmZip = require('adm-zip');
-    stagingDir = path.join(os.tmpdir(), `dndj_import_${Date.now()}`);
-    new AdmZip(res.filePaths[0]).extractAllTo(stagingDir, true);
-    sources = importer.walkAudio(stagingDir).map(abs => ({
-      absPath: abs,
-      folder: path.relative(stagingDir, path.dirname(abs)).split(path.sep).join('/'),
-      filename: path.basename(abs),
-    }));
+// Classify arbitrary filesystem paths (from a drag-drop) into import sources.
+// Supported: directories, .zip archives, and audio files. Anything else is ignored.
+function buildSourcesFromPaths(paths) {
+  const sources = [];
+  const stagingDirs = [];
+  for (const p of (paths || [])) {
+    let stat;
+    try { stat = fs.statSync(p); } catch { continue; }
+    if (stat.isDirectory()) {
+      // Use the dropped folder's parent as the base, so its own name becomes the group.
+      sources.push(...audioSourcesFromDir(p, path.dirname(p)));
+    } else if (path.extname(p).toLowerCase() === '.zip') {
+      try { const dir = extractZip(p); stagingDirs.push(dir); sources.push(...audioSourcesFromDir(dir, dir)); }
+      catch { /* skip bad zip */ }
+    } else if (importer.AUDIO_EXTS.includes(path.extname(p).toLowerCase())) {
+      sources.push({ absPath: p, folder: '', filename: path.basename(p) });
+    }
+    // else: unsupported → ignore
   }
+  return { sources, stagingDirs };
+}
 
-  if (sources.length === 0) {
-    if (stagingDir) { try { fs.rmSync(stagingDir, { recursive: true, force: true }); } catch {} }
-    return { canceled: false, stagingId: null, items: [] };
-  }
-
+// Register a staging session and return the renderer-safe item list.
+function createStaging(sources, stagingDirs) {
   const stagingId = String(Date.now());
   const withIds = sources.map((s, i) => ({ ...s, id: `${stagingId}_${i}` }));
-  importStaging.set(stagingId, { sources: withIds, stagingDir });
-
+  importStaging.set(stagingId, { sources: withIds, stagingDirs: stagingDirs || [] });
   const items = withIds.map(s => ({
     id: s.id,
     folder: s.folder,
@@ -555,7 +551,54 @@ ipcMain.handle('import:pick', async (_event, kind) => {
     suggestedName: importer.cleanName(s.filename),
     ext: path.extname(s.filename).slice(1).toLowerCase(),
   }));
-  return { canceled: false, stagingId, items };
+  return { stagingId, items };
+}
+
+function cleanStaging(staged) {
+  for (const d of (staged?.stagingDirs || [])) {
+    try { fs.rmSync(d, { recursive: true, force: true }); } catch {}
+  }
+}
+
+ipcMain.handle('import:pick', async (_event, kind) => {
+  let sources = [];
+  const stagingDirs = [];
+
+  if (kind === 'files') {
+    const res = await dialog.showOpenDialog(mainWindow, {
+      title: 'Import audio files', properties: ['openFile', 'multiSelections'], filters: [AUDIO_DIALOG_FILTER],
+    });
+    if (res.canceled) return { canceled: true };
+    sources = res.filePaths.map(p => ({ absPath: p, folder: '', filename: path.basename(p) }));
+
+  } else if (kind === 'folder') {
+    const res = await dialog.showOpenDialog(mainWindow, { title: 'Import a folder', properties: ['openDirectory'] });
+    if (res.canceled) return { canceled: true };
+    sources = audioSourcesFromDir(res.filePaths[0], res.filePaths[0]);
+
+  } else if (kind === 'zip') {
+    const res = await dialog.showOpenDialog(mainWindow, {
+      title: 'Import a .zip', properties: ['openFile'], filters: [{ name: 'Zip archive', extensions: ['zip'] }],
+    });
+    if (res.canceled) return { canceled: true };
+    const dir = extractZip(res.filePaths[0]);
+    stagingDirs.push(dir);
+    sources = audioSourcesFromDir(dir, dir);
+  }
+
+  if (sources.length === 0) {
+    cleanStaging({ stagingDirs });
+    return { canceled: false, stagingId: null, items: [] };
+  }
+  return { canceled: false, ...createStaging(sources, stagingDirs) };
+});
+
+// Stage from filesystem paths (used by drag-and-drop from outside the app).
+// Returns { stagingId, items } — items is empty if nothing supported was dropped.
+ipcMain.handle('import:stage-paths', async (_event, paths) => {
+  const { sources, stagingDirs } = buildSourcesFromPaths(paths);
+  if (sources.length === 0) { cleanStaging({ stagingDirs }); return { stagingId: null, items: [] }; }
+  return createStaging(sources, stagingDirs);
 });
 
 ipcMain.handle('import:commit', async (_event, { stagingId, mappings, newCategories }) => {
@@ -565,14 +608,13 @@ ipcMain.handle('import:commit', async (_event, { stagingId, mappings, newCategor
     db: dbManager.db, soundsDir: SOUNDS_DIR,
     sources: staged.sources, mappings, newCategories,
   });
-  if (staged.stagingDir) { try { fs.rmSync(staged.stagingDir, { recursive: true, force: true }); } catch {} }
+  cleanStaging(staged);
   importStaging.delete(stagingId);
   return { result, tracks: dbManager.getAllTracks.all() };
 });
 
 ipcMain.handle('import:cancel', (_event, stagingId) => {
-  const staged = importStaging.get(stagingId);
-  if (staged?.stagingDir) { try { fs.rmSync(staged.stagingDir, { recursive: true, force: true }); } catch {} }
+  cleanStaging(importStaging.get(stagingId));
   importStaging.delete(stagingId);
 });
 
