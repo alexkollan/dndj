@@ -7,7 +7,7 @@
 //   3. Handle IPC events from the renderer (library scan, audio URL resolution)
 //   4. Enable electron-reloader for instant reloads during development
 
-const { app, BrowserWindow, ipcMain, protocol, net } = require('electron');
+const { app, BrowserWindow, ipcMain, protocol, net, shell } = require('electron');
 const path = require('path');
 const url = require('url');
 const fs = require('fs');
@@ -785,6 +785,80 @@ ipcMain.handle('sync:pull', async (_e, { serverUrl, token }) => {
     send({ phase: 'error', text: err.message });
     return { ok: false, error: err.message };
   }
+});
+
+// ─── In-App Documentation ──────────────────────────────────────────────────────
+
+const DOCS_DIR = path.join(__dirname, 'docs');
+
+// List the markdown files available in each guide section.
+ipcMain.handle('docs:list', () => {
+  const out = {};
+  for (const section of ['user-guide', 'technical']) {
+    const dir = path.join(DOCS_DIR, section);
+    out[section] = fs.existsSync(dir)
+      ? fs.readdirSync(dir).filter(f => f.toLowerCase().endsWith('.md')).sort()
+      : [];
+  }
+  return out;
+});
+
+// Read a single markdown file. `relPath` is relative to the docs/ directory and
+// uses forward slashes (e.g. "user-guide/01-getting-started.md").
+ipcMain.handle('docs:read', (_event, relPath) => {
+  const resolved = path.join(DOCS_DIR, ...String(relPath).split('/'));
+  // Security: never read outside docs/
+  if (!resolved.toLowerCase().startsWith(DOCS_DIR.toLowerCase())) {
+    throw new Error('Access denied: path is outside the docs directory');
+  }
+  if (!fs.existsSync(resolved)) throw new Error(`Doc not found: ${relPath}`);
+  return fs.readFileSync(resolved, 'utf-8');
+});
+
+// Open external (http/https) links in the user's default browser.
+ipcMain.handle('shell:open-external', (_event, url) => {
+  if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+});
+
+// Lightly strip markdown markup so a matching line reads cleanly as a snippet.
+function cleanDocLine(s) {
+  return s
+    .replace(/`([^`]+)`/g, '$1')              // inline code
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')  // links → label
+    .replace(/[*_#>|]/g, ' ')                 // emphasis / headings / quotes / table pipes
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Full-text search across one guide section. Returns one entry per matching
+// file with its title (first H1), total match count, and up to 3 snippets.
+ipcMain.handle('docs:search', (_event, { section, query }) => {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q || !['user-guide', 'technical'].includes(section)) return [];
+  const dir = path.join(DOCS_DIR, section);
+  if (!fs.existsSync(dir)) return [];
+
+  const results = [];
+  for (const file of fs.readdirSync(dir).filter(f => f.toLowerCase().endsWith('.md')).sort()) {
+    const text = fs.readFileSync(path.join(dir, file), 'utf-8');
+    const lines = text.split(/\r?\n/);
+    const h1 = lines.find(l => l.startsWith('# '));
+    const title = h1 ? h1.replace(/^#\s+/, '').trim() : file;
+
+    const snippets = [];
+    let count = 0;
+    for (const line of lines) {
+      if (line.toLowerCase().includes(q)) {
+        count++;
+        if (snippets.length < 3) {
+          const clean = cleanDocLine(line);
+          if (clean) snippets.push(clean.length > 160 ? clean.slice(0, 160) + '…' : clean);
+        }
+      }
+    }
+    if (count > 0) results.push({ path: `${section}/${file}`, title, count, snippets });
+  }
+  return results;
 });
 
 ipcMain.handle('get-audio-url', (_event, relativePath) => {

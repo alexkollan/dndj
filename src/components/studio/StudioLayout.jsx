@@ -20,6 +20,7 @@ import MiniDeck from './MiniDeck.jsx';
 import Crossfader from './Crossfader.jsx';
 import SamplerStrip from './SamplerStrip.jsx';
 import ScenePanel from './ScenePanel.jsx';
+import DocsModal from './DocsModal.jsx';
 import '../../styles/studio/StudioLayout.css';
 
 const INIT_DECK_STATE = { isPlaying: false, isPaused: false };
@@ -82,6 +83,7 @@ function StudioLayout({
   const [playlistDropIndicator, setPlaylistDropIndicator] = useState(null);
   const [samplerKey, setSamplerKey] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [docsOpen, setDocsOpen] = useState(false);
   const [crossfaderKey, setCrossfaderKey] = useState(0);
   const [crossfaderInit, setCrossfaderInit] = useState({ pos: 0.5, curve: 'equal_power' });
 
@@ -544,6 +546,7 @@ function StudioLayout({
               <span className="studio__master-val">{Math.round(masterVolume * 100)}%</span>
             </div>
             <button className="studio__stop-btn" onClick={onStopAll}>■ STOP</button>
+            <button className="studio__settings-btn" onClick={() => setDocsOpen(true)} title="Guides & documentation">?</button>
             <button className="studio__settings-btn" onClick={() => setSettingsOpen(true)} title="Library settings">⚙</button>
           </div>
         </header>
@@ -684,6 +687,8 @@ function StudioLayout({
           onCategoryMetaChange={setCategoryMeta}
         />
       )}
+
+      {docsOpen && <DocsModal onClose={() => setDocsOpen(false)} />}
 
     </DndContext>
   );

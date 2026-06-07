@@ -74,6 +74,12 @@ contextBridge.exposeInMainWorld('dndj', {
   onYoutubeProgress: (cb) => ipcRenderer.on('youtube-progress', (_, data) => cb(data)),
   offYoutubeProgress: () => ipcRenderer.removeAllListeners('youtube-progress'),
 
+  // Documentation
+  docsList: () => ipcRenderer.invoke('docs:list'),
+  docsRead: (relPath) => ipcRenderer.invoke('docs:read', relPath),
+  docsSearch: (opts) => ipcRenderer.invoke('docs:search', opts),
+  openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
+
   // Sync
   syncStartServer: () => ipcRenderer.invoke('sync:start-server'),
   syncStopServer: () => ipcRenderer.invoke('sync:stop-server'),
