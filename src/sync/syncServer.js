@@ -13,12 +13,29 @@ let _port = 7432;
 
 function getLocalIp() {
   const ifaces = os.networkInterfaces();
-  for (const name of Object.keys(ifaces)) {
-    for (const iface of ifaces[name]) {
-      if (iface.family === 'IPv4' && !iface.internal) return iface.address;
+  const candidates = [];
+
+  for (const [name, addrs] of Object.entries(ifaces)) {
+    // Skip virtual/VPN adapters (WSL2, Hyper-V, VirtualBox, VMware, tunnels)
+    const n = name.toLowerCase();
+    if (n.includes('vethernet') || n.includes('wsl') || n.includes('loopback') ||
+        n.includes('virtualbox') || n.includes('vmware') || n.includes('tunnel') ||
+        n.includes('pseudo') || n.includes('teredo') || n.includes('isatap')) continue;
+
+    for (const addr of (addrs || [])) {
+      if (addr.family !== 'IPv4' || addr.internal) continue;
+      candidates.push({ ip: addr.address, name });
     }
   }
-  return '127.0.0.1';
+
+  // Prefer typical home LAN ranges in order
+  return (
+    candidates.find(c => c.ip.startsWith('192.168.'))?.ip ||
+    candidates.find(c => c.ip.startsWith('10.'))?.ip ||
+    candidates.find(c => c.ip.startsWith('172.'))?.ip ||
+    candidates[0]?.ip ||
+    '127.0.0.1'
+  );
 }
 
 function buildManifest(dir, base = '') {
