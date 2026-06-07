@@ -5,6 +5,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { playTrack, stopTrack } from '../../audioEngine.js';
 import { useAudioStore } from '../../store.js';
 import YoutubeImportDialog from './YoutubeImportDialog.jsx';
+import ImportDialog from './ImportDialog.jsx';
 import '../../styles/studio/TracklistPanel.css';
 
 // Fallback colors for well-known category names when no metadata exists
@@ -288,6 +289,7 @@ function TracklistPanel({ tracks, allTracks, tags, categoryMeta, urlCache, resol
   const [sortField, setSortField] = useState('name');
   const [sortDir, setSortDir] = useState('asc');
   const [ytOpen, setYtOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   // Build lookup maps for colors
   const catMetaMap = useMemo(() => Object.fromEntries((categoryMeta || []).map(m => [m.folder_name, m])), [categoryMeta]);
@@ -416,6 +418,9 @@ function TracklistPanel({ tracks, allTracks, tags, categoryMeta, urlCache, resol
             ↻ Refresh
           </button>
         )}
+        <button className="tl-yt-btn" onClick={() => setImportOpen(true)} title="Import files, a folder, or a .zip">
+          ⬇ Import
+        </button>
         <button className="tl-yt-btn" onClick={() => setYtOpen(true)} title="Import from YouTube">
           ⬇ YouTube
         </button>
@@ -428,6 +433,15 @@ function TracklistPanel({ tracks, allTracks, tags, categoryMeta, urlCache, resol
           categoryMeta={categoryMeta}
           existingTags={tags}
           onCategoryMetaChange={() => {}} // parent handles via onLibraryRefresh
+        />
+      )}
+      {importOpen && (
+        <ImportDialog
+          onClose={() => setImportOpen(false)}
+          onImported={(updatedTracks) => { if (updatedTracks) onTracksChange?.(updatedTracks); onLibraryRefresh?.(); }}
+          existingCategories={categories}
+          categoryMeta={categoryMeta}
+          existingTags={tags}
         />
       )}
 
