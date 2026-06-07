@@ -6,6 +6,12 @@ dist-electron
 .env.*
 .DS_Store
 
+# AI assistant context files
+CLAUDE.md
+GEMINI.md
+.claude/
+.gemini/
+
 # Data and Database
 data/
 
