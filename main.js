@@ -7,10 +7,11 @@
 //   3. Handle IPC events from the renderer (library scan, audio URL resolution)
 //   4. Enable electron-reloader for instant reloads during development
 
-const { app, BrowserWindow, ipcMain, protocol, net, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, protocol, net, shell, dialog } = require('electron');
 const path = require('path');
 const url = require('url');
 const fs = require('fs');
+const os = require('os');
 
 const AUDIO_MIME_TYPES = {
   '.mp3': 'audio/mpeg',
@@ -385,6 +386,195 @@ ipcMain.handle('integrity:cleanup', () => {
 });
 
 ipcMain.handle('app:quit', () => { app.quit(); });
+
+// Audio file filter shared by the relink/import dialogs.
+const AUDIO_DIALOG_FILTER = { name: 'Audio', extensions: ['mp3', 'ogg', 'wav', 'webm', 'm4a', 'aac', 'flac', 'opus'] };
+
+// Forward-slash path of `abs` relative to SOUNDS_DIR, or null if outside it.
+function relWithinSounds(abs) {
+  const base = path.resolve(SOUNDS_DIR);
+  const r = path.resolve(abs);
+  if (r.toLowerCase() === base.toLowerCase()) return '';
+  if (r.toLowerCase().startsWith(base.toLowerCase() + path.sep)) {
+    return r.slice(base.length + 1).split(path.sep).join('/');
+  }
+  return null;
+}
+
+function suffixedName(fileName) {
+  const ext = path.extname(fileName);
+  return `${path.basename(fileName, ext)}_${Date.now()}${ext}`;
+}
+
+// ─── Relink a missing track ────────────────────────────────────────────────────
+// Let the user point a missing track at the actual file (e.g. after renaming it
+// on disk). All references are kept — only path/category are updated.
+ipcMain.handle('integrity:relink-track', async (_event, trackId) => {
+  const track = dbManager.getTrackById.get(trackId);
+  if (!track) throw new Error('Track not found');
+
+  const res = await dialog.showOpenDialog(mainWindow, {
+    title: `Locate "${track.name}"`,
+    defaultPath: path.join(SOUNDS_DIR, ...(track.category ? track.category.split('/') : [])),
+    properties: ['openFile'],
+    filters: [AUDIO_DIALOG_FILTER],
+  });
+  if (res.canceled || !res.filePaths[0]) return { relinked: false };
+
+  let abs = res.filePaths[0];
+  let relPath = relWithinSounds(abs);
+
+  // If the chosen file lives outside sounds/, copy it into the track's category.
+  if (!relPath) {
+    const cat = track.category || '';
+    const destDir = path.join(SOUNDS_DIR, ...(cat ? cat.split('/') : []));
+    if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+    let destName = path.basename(abs);
+    let destAbs = path.join(destDir, destName);
+    if (fs.existsSync(destAbs)) { destName = suffixedName(destName); destAbs = path.join(destDir, destName); }
+    fs.copyFileSync(abs, destAbs);
+    relPath = (cat ? cat + '/' : '') + destName;
+  }
+
+  const clash = dbManager.db.prepare('SELECT id FROM tracks WHERE path = ? AND id != ?').get(relPath, trackId);
+  if (clash) throw new Error('Another track already points to that file.');
+
+  const oldPath = track.path;
+  const newCategory = relPath.includes('/') ? relPath.split('/').slice(0, -1).join('/') : (track.category || '');
+  dbManager.db.prepare('UPDATE tracks SET path = ?, category = ?, is_missing = 0 WHERE id = ?')
+    .run(relPath, newCategory, trackId);
+  integrity.renameInSnapshots(dbManager.db, oldPath, relPath);
+  if (oldPath !== relPath) dbManager.insertSyncDeletion.run(oldPath);
+
+  return { relinked: true, tracks: dbManager.getAllTracks.all() };
+});
+
+// ─── Relink a missing category ─────────────────────────────────────────────────
+// Point a missing category folder at its new location and re-link every track
+// inside it by matching filenames. Also migrates the category's display/colour.
+ipcMain.handle('integrity:relink-category', async (_event, oldFolder) => {
+  const res = await dialog.showOpenDialog(mainWindow, {
+    title: `Locate the "${oldFolder}" category folder`,
+    defaultPath: SOUNDS_DIR,
+    properties: ['openDirectory'],
+  });
+  if (res.canceled || !res.filePaths[0]) return { relinked: 0 };
+
+  const dirAbs = res.filePaths[0];
+  const rel = relWithinSounds(dirAbs);
+  if (rel === null) throw new Error('Please choose a folder inside the sounds directory.');
+  if (rel === '' || rel.includes('/')) throw new Error('Pick a category folder that sits directly inside sounds/.');
+  const newFolder = rel;
+
+  const tracks = dbManager.db.prepare('SELECT id, path FROM tracks WHERE category = ?').all(oldFolder);
+  let relinked = 0;
+  const run = dbManager.db.transaction(() => {
+    for (const t of tracks) {
+      const fname = t.path.split('/').pop();
+      if (!fs.existsSync(path.join(dirAbs, fname))) continue;
+      const newPath = `${newFolder}/${fname}`;
+      if (dbManager.db.prepare('SELECT id FROM tracks WHERE path = ? AND id != ?').get(newPath, t.id)) continue;
+      dbManager.db.prepare('UPDATE tracks SET path = ?, category = ?, is_missing = 0 WHERE id = ?')
+        .run(newPath, newFolder, t.id);
+      integrity.renameInSnapshots(dbManager.db, t.path, newPath);
+      if (t.path !== newPath) dbManager.insertSyncDeletion.run(t.path);
+      relinked++;
+    }
+    if (newFolder !== oldFolder) {
+      const meta = dbManager.db.prepare('SELECT display_name, color FROM category_meta WHERE folder_name = ?').get(oldFolder);
+      if (meta) {
+        dbManager.db.prepare(`
+          INSERT INTO category_meta (folder_name, display_name, color) VALUES (?, ?, ?)
+          ON CONFLICT(folder_name) DO UPDATE SET display_name = excluded.display_name, color = excluded.color
+        `).run(newFolder, meta.display_name, meta.color);
+        dbManager.db.prepare('DELETE FROM category_meta WHERE folder_name = ?').run(oldFolder);
+      }
+    }
+  });
+  run();
+
+  return { relinked, tracks: dbManager.getAllTracks.all() };
+});
+
+// ─── Import (files / folder / .zip) ────────────────────────────────────────────
+
+const importer = require('./src/importer');
+const importStaging = new Map(); // stagingId → { sources, stagingDir }
+
+ipcMain.handle('import:pick', async (_event, kind) => {
+  let sources = [];
+  let stagingDir = null;
+
+  if (kind === 'files') {
+    const res = await dialog.showOpenDialog(mainWindow, {
+      title: 'Import audio files',
+      properties: ['openFile', 'multiSelections'],
+      filters: [AUDIO_DIALOG_FILTER],
+    });
+    if (res.canceled) return { canceled: true };
+    sources = res.filePaths.map(p => ({ absPath: p, folder: '', filename: path.basename(p) }));
+
+  } else if (kind === 'folder') {
+    const res = await dialog.showOpenDialog(mainWindow, { title: 'Import a folder', properties: ['openDirectory'] });
+    if (res.canceled) return { canceled: true };
+    const root = res.filePaths[0];
+    sources = importer.walkAudio(root).map(abs => ({
+      absPath: abs,
+      folder: path.relative(root, path.dirname(abs)).split(path.sep).join('/'),
+      filename: path.basename(abs),
+    }));
+
+  } else if (kind === 'zip') {
+    const res = await dialog.showOpenDialog(mainWindow, {
+      title: 'Import a .zip', properties: ['openFile'], filters: [{ name: 'Zip archive', extensions: ['zip'] }],
+    });
+    if (res.canceled) return { canceled: true };
+    const AdmZip = require('adm-zip');
+    stagingDir = path.join(os.tmpdir(), `dndj_import_${Date.now()}`);
+    new AdmZip(res.filePaths[0]).extractAllTo(stagingDir, true);
+    sources = importer.walkAudio(stagingDir).map(abs => ({
+      absPath: abs,
+      folder: path.relative(stagingDir, path.dirname(abs)).split(path.sep).join('/'),
+      filename: path.basename(abs),
+    }));
+  }
+
+  if (sources.length === 0) {
+    if (stagingDir) { try { fs.rmSync(stagingDir, { recursive: true, force: true }); } catch {} }
+    return { canceled: false, stagingId: null, items: [] };
+  }
+
+  const stagingId = String(Date.now());
+  const withIds = sources.map((s, i) => ({ ...s, id: `${stagingId}_${i}` }));
+  importStaging.set(stagingId, { sources: withIds, stagingDir });
+
+  const items = withIds.map(s => ({
+    id: s.id,
+    folder: s.folder,
+    filename: s.filename,
+    suggestedName: importer.cleanName(s.filename),
+    ext: path.extname(s.filename).slice(1).toLowerCase(),
+  }));
+  return { canceled: false, stagingId, items };
+});
+
+ipcMain.handle('import:commit', async (_event, { stagingId, mappings, newCategories }) => {
+  const staged = importStaging.get(stagingId);
+  if (!staged) throw new Error('Import session expired — please pick the files again.');
+  const result = importer.commitImport({
+    db: dbManager.db, soundsDir: SOUNDS_DIR,
+    sources: staged.sources, mappings, newCategories,
+  });
+  if (staged.stagingDir) { try { fs.rmSync(staged.stagingDir, { recursive: true, force: true }); } catch {} }
+  importStaging.delete(stagingId);
+  return { result, tracks: dbManager.getAllTracks.all() };
+});
+
+ipcMain.handle('import:cancel', (_event, stagingId) => {
+  const staged = importStaging.get(stagingId);
+  if (staged?.stagingDir) { try { fs.rmSync(staged.stagingDir, { recursive: true, force: true }); } catch {} }
+  importStaging.delete(stagingId);
+});
 
 /**
  * Handle 'get-setting'

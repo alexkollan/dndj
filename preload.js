@@ -77,7 +77,14 @@ contextBridge.exposeInMainWorld('dndj', {
   // Database integrity
   integrityCheck: () => ipcRenderer.invoke('integrity:check'),
   integrityCleanup: () => ipcRenderer.invoke('integrity:cleanup'),
+  relinkTrack: (trackId) => ipcRenderer.invoke('integrity:relink-track', trackId),
+  relinkCategory: (folder) => ipcRenderer.invoke('integrity:relink-category', folder),
   quitApp: () => ipcRenderer.invoke('app:quit'),
+
+  // Import (files / folder / zip)
+  importPick: (kind) => ipcRenderer.invoke('import:pick', kind),
+  importCommit: (opts) => ipcRenderer.invoke('import:commit', opts),
+  importCancel: (stagingId) => ipcRenderer.invoke('import:cancel', stagingId),
 
   // Documentation
   docsList: () => ipcRenderer.invoke('docs:list'),
