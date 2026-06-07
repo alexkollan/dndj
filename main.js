@@ -451,12 +451,15 @@ ipcMain.handle('move-track-to-category', async (_e, trackId, newCategory) => {
 
 // ─── Tag Management ───────────────────────────────────────────────────────────
 
-ipcMain.handle('delete-track', async (_e, trackId, deleteFile = false) => {
+ipcMain.handle('delete-track', async (_e, trackId, deleteFile = false, globalDelete = false) => {
   const track = dbManager.getTrackById.get(trackId);
   if (!track) throw new Error('Track not found');
   if (deleteFile) {
     const absPath = path.join(SOUNDS_DIR, ...track.path.split('/'));
     try { if (fs.existsSync(absPath)) fs.unlinkSync(absPath); } catch (_) {}
+  }
+  if (globalDelete && track.path) {
+    dbManager.insertSyncDeletion.run(track.path);
   }
   dbManager.deleteTrack.run(trackId);
   return dbManager.getAllTracks.all();
@@ -727,11 +730,23 @@ ipcMain.handle('sync:pull', async (_e, { serverUrl, token }) => {
       fs.renameSync(tempDbPath, DB_PATH);
     }
 
-    // The pulled DB may have sync_server_enabled=true (from the server machine).
-    // Always clear it so this machine does not auto-start as a server after restart.
+    // Open the new DB to apply client-side fixups before restart.
     const Database = require('better-sqlite3');
     const tmpDb = new Database(DB_PATH);
+
+    // Never auto-start as server on this (client) machine.
     tmpDb.prepare(`INSERT OR REPLACE INTO settings (key, value) VALUES ('sync_server_enabled', 'false')`).run();
+
+    // Process global deletions queued by the server and clear them.
+    const pendingDeletions = tmpDb.prepare(`SELECT file_path FROM sync_deletions`).all();
+    for (const { file_path } of pendingDeletions) {
+      const absPath = path.join(SOUNDS_DIR, ...file_path.split('/'));
+      try { if (fs.existsSync(absPath)) fs.unlinkSync(absPath); } catch {}
+    }
+    if (pendingDeletions.length > 0) {
+      tmpDb.prepare(`DELETE FROM sync_deletions`).run();
+    }
+
     tmpDb.close();
 
     send({ phase: 'done', text: `Sync complete — ${filesDownloaded} file(s) updated. Restarting...` });

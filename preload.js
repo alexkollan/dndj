@@ -53,7 +53,7 @@ contextBridge.exposeInMainWorld('dndj', {
   deleteCuePoint: (id) => ipcRenderer.invoke('delete-cue-point', id),
 
   // Track management
-  deleteTrack: (trackId, deleteFile) => ipcRenderer.invoke('delete-track', trackId, deleteFile),
+  deleteTrack: (trackId, deleteFile, globalDelete) => ipcRenderer.invoke('delete-track', trackId, deleteFile, globalDelete),
   // Category metadata
   moveTrackToCategory: (trackId, newCategory) => ipcRenderer.invoke('move-track-to-category', trackId, newCategory),
   getCategoryMeta: () => ipcRenderer.invoke('get-category-meta'),

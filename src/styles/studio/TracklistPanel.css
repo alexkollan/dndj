@@ -421,6 +421,24 @@
 .tr-menu-item:hover { background: var(--bg-panel); color: var(--text-primary); }
 .tr-menu-item--danger { color: #ef4444; }
 .tr-menu-item--danger:hover { background: rgba(239,68,68,0.1); color: #ef4444; }
+.tr-menu-item--warn { color: #f59e0b; }
+.tr-menu-item--warn:hover { background: rgba(245,158,11,0.1); color: #f59e0b; }
+.tr-menu-item--cancel { color: var(--text-muted); font-size: var(--text-xs); }
+
+.tr-menu-delete-opts {
+  border-top: 1px solid rgba(239, 68, 68, 0.2);
+  padding-top: var(--s-1);
+}
+
+.tr-menu-delete-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b7280;
+  padding: var(--s-1) var(--s-2-5) var(--s-1);
+}
 
 .tr-menu-danger-row { border-top: 1px solid rgba(239,68,68,0.2); }
 .tr-menu-danger-label { font-size: 11px; color: #ef4444; flex: 1; }

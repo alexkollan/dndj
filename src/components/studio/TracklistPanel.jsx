@@ -38,7 +38,7 @@ function RowInner({ track, isPlaying, onPlayToggle, onLoadToDeck, onRename, onAd
   const [tagVal, setTagVal] = useState('');
   const [movingTo, setMovingTo] = useState(false);
   const [moveTarget, setMoveTarget] = useState('');
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteMode, setDeleteMode] = useState(false);
   const menuRef = useRef(null);
   const renameRef = useRef(null);
   const tagRef = useRef(null);
@@ -203,14 +203,24 @@ function RowInner({ track, isPlaying, onPlayToggle, onLoadToDeck, onRename, onAd
                 </button>
               )}
               {onDelete && (
-                confirmDelete ? (
-                  <div className="tr-menu-tag-row tr-menu-danger-row">
-                    <span className="tr-menu-danger-label">Delete file?</span>
-                    <button className="tr-menu-confirm tr-menu-confirm--danger" onClick={e => { e.stopPropagation(); onDelete(track.id, true); setMenuOpen(false); }}>✓</button>
-                    <button className="tr-menu-confirm" onClick={e => { e.stopPropagation(); setConfirmDelete(false); }}>✕</button>
+                deleteMode ? (
+                  <div className="tr-menu-delete-opts">
+                    <span className="tr-menu-delete-label">Delete where?</span>
+                    <button className="tr-menu-item" onClick={e => { e.stopPropagation(); onDelete(track.id, false, false); setMenuOpen(false); setDeleteMode(false); }}>
+                      Remove from library
+                    </button>
+                    <button className="tr-menu-item tr-menu-item--warn" onClick={e => { e.stopPropagation(); onDelete(track.id, true, false); setMenuOpen(false); setDeleteMode(false); }}>
+                      Delete from this machine
+                    </button>
+                    <button className="tr-menu-item tr-menu-item--danger" onClick={e => { e.stopPropagation(); onDelete(track.id, true, true); setMenuOpen(false); setDeleteMode(false); }}>
+                      ⚠ Delete everywhere
+                    </button>
+                    <button className="tr-menu-item tr-menu-item--cancel" onClick={e => { e.stopPropagation(); setDeleteMode(false); }}>
+                      Cancel
+                    </button>
                   </div>
                 ) : (
-                  <button className="tr-menu-item tr-menu-item--danger" onClick={() => setConfirmDelete(true)}>
+                  <button className="tr-menu-item tr-menu-item--danger" onClick={() => setDeleteMode(true)}>
                     🗑 Delete track
                   </button>
                 )
@@ -340,9 +350,9 @@ function TracklistPanel({ tracks, allTracks, tags, categoryMeta, urlCache, resol
     onTracksChange?.(updatedTracks);
   }, [onTracksChange]);
 
-  const handleDelete = useCallback(async (trackId, deleteFile) => {
+  const handleDelete = useCallback(async (trackId, deleteFile, globalDelete = false) => {
     try {
-      const updated = await window.dndj.deleteTrack(trackId, deleteFile);
+      const updated = await window.dndj.deleteTrack(trackId, deleteFile, globalDelete);
       onTracksChange?.(updated);
     } catch (e) { alert(`Delete failed: ${e.message}`); }
   }, [onTracksChange]);

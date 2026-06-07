@@ -153,6 +153,15 @@ db.exec(`
   )
 `);
 
+// Sync deletion queue — file paths to delete on other machines at next pull
+db.exec(`
+  CREATE TABLE IF NOT EXISTS sync_deletions (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    file_path  TEXT NOT NULL,
+    deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
+`);
+
 // Tag colors
 const tagsInfo = db.prepare("PRAGMA table_info(tags)").all();
 if (!tagsInfo.some(col => col.name === 'color')) {
@@ -320,6 +329,9 @@ const deleteCategoryMeta = db.prepare(`DELETE FROM category_meta WHERE folder_na
 // ─── Track Delete ─────────────────────────────────────────────────────────────
 
 const deleteTrack = db.prepare(`DELETE FROM tracks WHERE id = ?`);
+const insertSyncDeletion = db.prepare(`INSERT INTO sync_deletions (file_path) VALUES (?)`);
+const getAllSyncDeletions = db.prepare(`SELECT file_path FROM sync_deletions`);
+const clearSyncDeletions = db.prepare(`DELETE FROM sync_deletions`);
 
 // ─── Tag Management Operations ────────────────────────────────────────────────
 
@@ -374,6 +386,9 @@ module.exports = {
   deleteCategoryMeta,
   // Track Delete
   deleteTrack,
+  insertSyncDeletion,
+  getAllSyncDeletions,
+  clearSyncDeletions,
   // Tag Management
   updateTag,
   deleteTag,
