@@ -31,9 +31,17 @@ anywhere with the **⬇ Import** button in the tracklist toolbar. It copies the
 files into your library for you and lets you sort them into categories as they come
 in. (For pulling audio off YouTube, see [YouTube Import](./09-youtube-import.md).)
 
-Click **⬇ Import** and choose:
+There are two ways to start an import:
 
-- **Audio files** — pick one or more individual files.
+- Click **⬇ Import** and choose **Audio files**, **A folder**, or **A .zip**.
+- **Or just drag and drop** audio files, a folder, or a `.zip` from your file
+  manager **onto the app window** — at any time. A "Drop to import" overlay appears
+  while you're dragging. (DNDj only reacts to supported items: audio files,
+  folders, and `.zip` archives. Drop anything else and nothing happens.)
+
+Either way:
+
+- **Audio files** — one or more individual files.
 - **A folder** — DNDj looks through it (and its subfolders) for audio.
 - **A .zip** — same, but reads inside the archive.
 

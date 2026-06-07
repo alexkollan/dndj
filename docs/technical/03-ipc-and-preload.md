@@ -109,8 +109,10 @@ See [Integrity & Reliability](./13-integrity.md) and the
 | Method | Channel | Notes |
 |--------|---------|-------|
 | `importPick(kind)` | `import:pick` | `kind` ∈ `files`\|`folder`\|`zip`. Opens a dialog, stages discovered audio. Returns `{ canceled?, stagingId, items:[{id,folder,filename,suggestedName,ext}] }` |
+| `importStagePaths(paths)` | `import:stage-paths` | Stages from given filesystem paths (drag-and-drop); classifies each as audio/folder/zip, ignores the rest. Returns `{ stagingId, items }` (empty if nothing supported) |
 | `importCommit({stagingId, mappings, newCategories})` | `import:commit` | Copies staged files into `sounds/<category>/`, creates categories, inserts tracks. Returns `{ result, tracks }` |
 | `importCancel(stagingId)` | `import:cancel` | Discards a staging session (and any temp zip extraction) |
+| `getPathForFile(file)` | — (preload `webUtils`) | Resolves a dropped `File`'s absolute path (Electron 35+; not an IPC call) |
 
 See [Import Pipeline](./14-import.md).
 

@@ -38,9 +38,33 @@ renderer receives only safe `items`: `{ id, folder, filename, suggestedName, ext
 Looks up the staging entry and calls `importer.commitImport`. Afterwards it deletes
 any temp zip dir and drops the staging entry. Returns `{ result, tracks }`.
 
+### `import:stage-paths(paths)` (drag-and-drop)
+Stages from filesystem paths instead of a dialog. `buildSourcesFromPaths`
+classifies each path with `fs.statSync` / extension: **directory** → `walkAudio`
+(grouped under the dropped folder's name), **`.zip`** → extract to temp +
+`walkAudio`, **audio file** → a root-level source. Anything else is ignored; if
+nothing supported is found it returns `{ items: [] }` so the renderer does nothing.
+
 ### `import:cancel(stagingId)`
 Discards a staging session and its temp extraction (called when the dialog closes
 without importing).
+
+> Both `import:pick` and `import:stage-paths` funnel through shared
+> `createStaging` / `cleanStaging` helpers; a staging entry holds `stagingDirs`
+> (an array, since a multi-zip drop yields several temp extractions to clean up).
+
+## Drag-and-drop (renderer)
+
+`StudioLayout` attaches window-level `dragenter`/`dragover`/`dragleave`/`drop`
+listeners. They act **only** when `dataTransfer.types` includes `"Files"` — so
+internal @dnd-kit drags (which are pointer-based, not native HTML5 DnD) never
+trigger them. `dragover`/`drop` call `preventDefault()` to stop Electron from
+navigating to the dropped file. On drop, each `File` is resolved to an absolute
+path via `window.dndj.getPathForFile` (preload `webUtils.getPathForFile`, since
+`File.path` was removed in Electron 32+), the paths go to `import:stage-paths`, and
+if any supported items come back an [`ImportDialog`](./07-components.md#importdialogjsx)
+opens at the mapping step (`initialStaging`). A "Drop to import" overlay shows
+while dragging.
 
 ## `importer.commitImport({ db, soundsDir, sources, mappings, newCategories })`
 

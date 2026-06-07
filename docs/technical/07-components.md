@@ -60,6 +60,9 @@ Key responsibilities:
 - **Resizers:** rail width (→ `useUIStore`), deck A/B split (→ `useUIStore`), deck
   height (local state). The deck grid is `${deckASplit}fr 160px ${1-deckASplit}fr`
   — the centre `160px` is the fixed-width crossfader/Deck-C column.
+- **External drag-and-drop:** window-level file-drop listeners stage dropped
+  audio/folders/zips and open an `ImportDialog`; also hosts the 🩺 health report
+  and the drop overlay. See [Import → Drag-and-drop](./14-import.md#drag-and-drop-renderer).
 
 ## `PlaylistRail.jsx`
 The playlist tree plus the Smart-playlist editor. Exports
@@ -199,8 +202,10 @@ folder|zip)`; **map** groups the returned items by source folder and lets the us
 assign each group to an existing/new category (+ colour), add group tags, and
 expand to rename/skip/override individual tracks; **commit** builds `mappings` +
 `newCategories` and calls `importCommit`, then refreshes the library via
-`onImported`. Closing before commit calls `importCancel` to clean up. See
-[Import Pipeline](./14-import.md).
+`onImported`. Closing before commit calls `importCancel` to clean up. An optional
+`initialStaging` prop opens it straight on the mapping step — used by the
+drag-and-drop flow (see [StudioLayout](#studiolayoutjsx) and
+[Import Pipeline](./14-import.md#drag-and-drop-renderer)).
 
 ---
 
