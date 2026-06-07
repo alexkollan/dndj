@@ -393,6 +393,23 @@
 }
 .smart-editor__rule-rm:hover { color: var(--danger); }
 
+.smart-editor__rule--exclusion {
+  background: var(--danger-muted, rgba(239,68,68,0.08));
+  border: 1px solid var(--danger-subtle, rgba(239,68,68,0.25));
+  border-radius: var(--radius-sm);
+  padding: var(--s-1) var(--s-2);
+  justify-content: space-between;
+}
+.smart-editor__exclusion-label {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+.smart-editor__exclusion-label em {
+  color: var(--text-primary);
+  font-style: normal;
+  font-weight: 500;
+}
+
 .smart-editor__hint {
   color: var(--text-muted);
   font-size: var(--text-sm);

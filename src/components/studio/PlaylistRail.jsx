@@ -30,6 +30,10 @@ export function evaluateSmartPlaylist(tracks, rulesJson) {
               : rule.op === 'not_contains' ? !ts.some(t => t.includes(val))
               : rule.op === 'equals' ? ts.includes(val) : !ts.includes(val);
           }
+          case 'id': {
+            const id = String(track.id);
+            return rule.op === 'not_eq' ? id !== val : id === val;
+          }
           default: return false;
         }
       });
@@ -75,6 +79,12 @@ function SmartEditor({ playlist, onSave, onClose }) {
         </div>
         <div className="smart-editor__rules">
           {rules.map((rule, i) => (
+            rule.field === 'id' ? (
+              <div key={i} className="smart-editor__rule smart-editor__rule--exclusion">
+                <span className="smart-editor__exclusion-label">Exclude: <em>{rule.trackName || `#${rule.value}`}</em></span>
+                <button className="smart-editor__rule-rm" onClick={() => removeRule(i)}>×</button>
+              </div>
+            ) : (
             <div key={i} className="smart-editor__rule">
               <select value={rule.field} onChange={e => updateRule(i, 'field', e.target.value)}>
                 <option value="name">Name</option>
@@ -95,6 +105,7 @@ function SmartEditor({ playlist, onSave, onClose }) {
               />
               <button className="smart-editor__rule-rm" onClick={() => removeRule(i)}>×</button>
             </div>
+            )
           ))}
           {rules.length === 0 && <p className="smart-editor__hint">Click + Add Rule to filter tracks.</p>}
         </div>
@@ -114,7 +125,7 @@ function SmartEditor({ playlist, onSave, onClose }) {
 }
 
 // ─── Track item inside the tree ───────────────────────────────────────────────
-function TrackTreeItem({ track, depth }) {
+function TrackTreeItem({ track, depth, onRemove }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `tree-track-${track.id}`,
     data: { trackId: track.id, trackName: track.name },
@@ -131,6 +142,15 @@ function TrackTreeItem({ track, depth }) {
     >
       <span className="pl-item__icon pl-item__icon--track">♩</span>
       <span className="pl-item__name">{track.name}</span>
+      {onRemove && (
+        <div className="pl-item__actions" onPointerDown={e => e.stopPropagation()}>
+          <button
+            className="pl-item__btn pl-item__btn--del"
+            title="Remove from folder"
+            onClick={e => { e.stopPropagation(); onRemove(); }}
+          >×</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -294,10 +314,10 @@ function PlaylistRail({
     } catch { /* ignore */ }
   }, []);
 
-  // Load tracks for all non-smart playlists on mount and whenever the playlist list changes
+  // Load tracks only for folder-type playlists (shown in sidebar tree)
   useEffect(() => {
     playlists
-      .filter(p => p.type !== 'smart')
+      .filter(p => p.type === 'folder')
       .forEach(p => loadTracksFor(p.id));
   }, [playlists, loadTracksFor]);
 
@@ -372,7 +392,7 @@ function PlaylistRail({
   const renderTree = (pl, depth = 0) => {
     const isCollapsed = collapsedFolders.has(pl.id);
     const kids = childrenOf(pl.id);
-    const tracks = pl.type !== 'smart' ? (playlistTracks[pl.id] || []) : [];
+    const tracks = pl.type === 'folder' ? (playlistTracks[pl.id] || []) : [];
     const hasVisibleChildren = kids.length > 0 || tracks.length > 0;
 
     return (
@@ -393,7 +413,15 @@ function PlaylistRail({
       >
         {kids.map(child => renderTree(child, depth + 1))}
         {tracks.map(track => (
-          <TrackTreeItem key={`t-${track.id}`} track={track} depth={depth + 1} />
+          <TrackTreeItem
+            key={`t-${track.id}`}
+            track={track}
+            depth={depth + 1}
+            onRemove={async () => {
+              await window.dndj.removeTrackFromPlaylist(pl.id, track.id);
+              loadTracksFor(pl.id);
+            }}
+          />
         ))}
       </PlaylistItem>
     );

@@ -241,6 +241,26 @@ function StudioLayout({
     return pl?.type === 'manual';
   }, [selectedPlaylistId, playlists]);
 
+  const selectedPlaylistType = useMemo(() => {
+    if (selectedPlaylistId === null) return null;
+    return playlists.find(p => p.id === selectedPlaylistId)?.type || null;
+  }, [selectedPlaylistId, playlists]);
+
+  const handleRemoveFromPlaylist = useCallback(async (playlistId, trackId) => {
+    const pl = playlists.find(p => p.id === playlistId);
+    if (!pl) return;
+    if (pl.type === 'smart') {
+      const parsed = pl.rules_json ? JSON.parse(pl.rules_json) : { combinator: 'AND', rules: [] };
+      const trackName = allTracks.find(t => t.id === trackId)?.name || String(trackId);
+      const newRules = { ...parsed, rules: [...parsed.rules, { field: 'id', op: 'not_eq', value: String(trackId), trackName }] };
+      await window.dndj.updatePlaylist(pl.id, pl.name, pl.parent_id, JSON.stringify(newRules), pl.sort_order);
+      await loadPlaylists();
+    } else {
+      await window.dndj.removeTrackFromPlaylist(playlistId, trackId);
+      await loadPlaylistTracks(playlistId);
+    }
+  }, [playlists, allTracks, loadPlaylists, loadPlaylistTracks]);
+
   // ── Load track to deck ──────────────────────────────────────────────────────
   const handleLoadToDeck = useCallback(async (deckId, track) => {
     const url = urlCache[track.path] || await resolveUrl(track.path);
@@ -254,6 +274,7 @@ function StudioLayout({
   const handleGetSnapshot = useCallback(async () => {
     const mixerA = getDeckMixerState('A');
     const mixerB = getDeckMixerState('B');
+    const mixerC = getDeckMixerState('C');
     const xfade = getCrossfadeState();
     const samplerRaw = await window.dndj.getSetting('sampler_pads');
     const samplerPads = samplerRaw ? JSON.parse(samplerRaw) : Array(8).fill(null);
@@ -261,6 +282,7 @@ function StudioLayout({
       version: 1,
       deckA: deckTracks.A ? { path: deckTracks.A.track.path, ...(mixerA || {}) } : null,
       deckB: deckTracks.B ? { path: deckTracks.B.track.path, ...(mixerB || {}) } : null,
+      deckC: deckTracks.C ? { path: deckTracks.C.track.path, ...(mixerC || {}) } : null,
       crossfade: xfade,
       samplerPads,
     };
@@ -275,9 +297,10 @@ function StudioLayout({
     }
     stopDeck('A');
     stopDeck('B');
-    setDeckState(prev => ({ ...prev, A: INIT_DECK_STATE, B: INIT_DECK_STATE }));
+    stopDeck('C');
+    setDeckState(prev => ({ ...prev, A: INIT_DECK_STATE, B: INIT_DECK_STATE, C: INIT_DECK_STATE }));
 
-    for (const [deckId, key] of [['A', 'deckA'], ['B', 'deckB']]) {
+    for (const [deckId, key] of [['A', 'deckA'], ['B', 'deckB'], ['C', 'deckC']]) {
       const snap = snapshot[key];
       if (!snap?.path) { setDeckTracks(prev => ({ ...prev, [deckId]: null })); continue; }
       const track = (allTracks || []).find(t => t.path === snap.path);
@@ -561,7 +584,7 @@ function StudioLayout({
               ref={decksRef}
               style={{
                 height: deckHeight,
-                gridTemplateColumns: `${deckASplit}fr auto ${1 - deckASplit}fr`,
+                gridTemplateColumns: `${deckASplit}fr 160px ${1 - deckASplit}fr`,
               }}
             >
               <div className="studio__deck studio__deck--a deck--a">
@@ -618,10 +641,12 @@ function StudioLayout({
                 urlCache={urlCache || {}}
                 resolveUrl={resolveUrl}
                 selectedPlaylistId={selectedPlaylistId}
+                selectedPlaylistType={selectedPlaylistType}
                 isReorderable={isReorderable}
                 onLoadToDeck={handleLoadToDeck}
                 onRename={onRename}
                 onAddTag={onAddTag}
+                onRemoveFromPlaylist={handleRemoveFromPlaylist}
                 onLibraryRefresh={handleLibraryRefresh}
                 onTracksChange={onTracksChange}
               />

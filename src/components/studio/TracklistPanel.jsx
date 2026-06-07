@@ -24,7 +24,7 @@ function formatDur(sec) {
 }
 
 // ─── Shared row inner content ─────────────────────────────────────────────────
-function RowInner({ track, isPlaying, onPlayToggle, onLoadToDeck, onRename, onAddTag, onMoved, onDelete, onRemoveFromPlaylist, selectedPlaylistId, categories, catMetaMap, tagColorMap }) {
+function RowInner({ track, isPlaying, onPlayToggle, onLoadToDeck, onRename, onAddTag, onMoved, onDelete, onRemoveFromPlaylist, selectedPlaylistId, selectedPlaylistType, categories, catMetaMap, tagColorMap }) {
   const catKey = track.category?.toLowerCase();
   const catMeta = catMetaMap?.[catKey];
   const catColor = catMeta?.color || CAT_COLORS_FALLBACK[catKey] || '#6b7280';
@@ -199,7 +199,9 @@ function RowInner({ track, isPlaying, onPlayToggle, onLoadToDeck, onRename, onAd
               )}
               {selectedPlaylistId !== null && onRemoveFromPlaylist && (
                 <button className="tr-menu-item" onClick={() => { onRemoveFromPlaylist(selectedPlaylistId, track.id); setMenuOpen(false); }}>
-                  ✕ Remove from playlist
+                  ✕ {selectedPlaylistType === 'folder' ? 'Remove from folder'
+                     : selectedPlaylistType === 'smart' ? 'Exclude from playlist'
+                     : 'Remove from playlist'}
                 </button>
               )}
               {onDelete && (
@@ -231,7 +233,7 @@ function RowInner({ track, isPlaying, onPlayToggle, onLoadToDeck, onRename, onAd
 }
 
 // ─── Draggable row (library view) ─────────────────────────────────────────────
-function DraggableRow({ track, isPlaying, onPlayToggle, onLoadToDeck, onRename, onAddTag, onMoved, onDelete, onRemoveFromPlaylist, selectedPlaylistId, categories, catMetaMap, tagColorMap }) {
+function DraggableRow({ track, isPlaying, onPlayToggle, onLoadToDeck, onRename, onAddTag, onMoved, onDelete, onRemoveFromPlaylist, selectedPlaylistId, selectedPlaylistType, categories, catMetaMap, tagColorMap }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `track-${track.id}`,
     data: { trackId: track.id, trackName: track.name },
@@ -242,13 +244,13 @@ function DraggableRow({ track, isPlaying, onPlayToggle, onLoadToDeck, onRename, 
       className={`tr ${isPlaying ? 'tr--playing' : ''} ${isDragging ? 'tr--dragging' : ''}`}
     >
       <span className="tr-drag" {...listeners} {...attributes} title="Drag to a playlist or deck">⣿</span>
-      <RowInner track={track} isPlaying={isPlaying} onPlayToggle={onPlayToggle} onLoadToDeck={onLoadToDeck} onRename={onRename} onAddTag={onAddTag} onMoved={onMoved} onDelete={onDelete} onRemoveFromPlaylist={onRemoveFromPlaylist} selectedPlaylistId={selectedPlaylistId} categories={categories} catMetaMap={catMetaMap} tagColorMap={tagColorMap} />
+      <RowInner track={track} isPlaying={isPlaying} onPlayToggle={onPlayToggle} onLoadToDeck={onLoadToDeck} onRename={onRename} onAddTag={onAddTag} onMoved={onMoved} onDelete={onDelete} onRemoveFromPlaylist={onRemoveFromPlaylist} selectedPlaylistId={selectedPlaylistId} selectedPlaylistType={selectedPlaylistType} categories={categories} catMetaMap={catMetaMap} tagColorMap={tagColorMap} />
     </div>
   );
 }
 
 // ─── Sortable row (playlist view) ─────────────────────────────────────────────
-function SortableRow({ track, isPlaying, onPlayToggle, onLoadToDeck, onRename, onAddTag, onMoved, onDelete, onRemoveFromPlaylist, selectedPlaylistId, categories, catMetaMap, tagColorMap }) {
+function SortableRow({ track, isPlaying, onPlayToggle, onLoadToDeck, onRename, onAddTag, onMoved, onDelete, onRemoveFromPlaylist, selectedPlaylistId, selectedPlaylistType, categories, catMetaMap, tagColorMap }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: track.id });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -262,7 +264,7 @@ function SortableRow({ track, isPlaying, onPlayToggle, onLoadToDeck, onRename, o
       className={`tr ${isPlaying ? 'tr--playing' : ''} ${isDragging ? 'tr--dragging' : ''}`}
     >
       <span className="tr-drag" {...listeners} {...attributes} title="Drag to reorder">⣿</span>
-      <RowInner track={track} isPlaying={isPlaying} onPlayToggle={onPlayToggle} onLoadToDeck={onLoadToDeck} onRename={onRename} onAddTag={onAddTag} onMoved={onMoved} onDelete={onDelete} onRemoveFromPlaylist={onRemoveFromPlaylist} selectedPlaylistId={selectedPlaylistId} categories={categories} catMetaMap={catMetaMap} tagColorMap={tagColorMap} />
+      <RowInner track={track} isPlaying={isPlaying} onPlayToggle={onPlayToggle} onLoadToDeck={onLoadToDeck} onRename={onRename} onAddTag={onAddTag} onMoved={onMoved} onDelete={onDelete} onRemoveFromPlaylist={onRemoveFromPlaylist} selectedPlaylistId={selectedPlaylistId} selectedPlaylistType={selectedPlaylistType} categories={categories} catMetaMap={catMetaMap} tagColorMap={tagColorMap} />
     </div>
   );
 }
@@ -278,7 +280,7 @@ function SortHeader({ label, field, sortField, sortDir, onSort }) {
 }
 
 // ─── TracklistPanel ───────────────────────────────────────────────────────────
-function TracklistPanel({ tracks, allTracks, tags, categoryMeta, urlCache, resolveUrl, selectedPlaylistId, isReorderable, onLoadToDeck, onRename, onAddTag, onLibraryRefresh, onTracksChange }) {
+function TracklistPanel({ tracks, allTracks, tags, categoryMeta, urlCache, resolveUrl, selectedPlaylistId, selectedPlaylistType, isReorderable, onLoadToDeck, onRename, onAddTag, onRemoveFromPlaylist, onLibraryRefresh, onTracksChange }) {
   const { playingUrls } = useAudioStore();
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState('');
@@ -355,9 +357,13 @@ function TracklistPanel({ tracks, allTracks, tags, categoryMeta, urlCache, resol
   }, [onTracksChange]);
 
   const handleRemoveFromPlaylist = useCallback(async (playlistId, trackId) => {
-    await window.dndj.removeTrackFromPlaylist(playlistId, trackId);
-    onLibraryRefresh?.();
-  }, [onLibraryRefresh]);
+    if (onRemoveFromPlaylist) {
+      await onRemoveFromPlaylist(playlistId, trackId);
+    } else {
+      await window.dndj.removeTrackFromPlaylist(playlistId, trackId);
+      onLibraryRefresh?.();
+    }
+  }, [onRemoveFromPlaylist, onLibraryRefresh]);
 
   const isTrackPlaying = useCallback((track) => {
     const url = urlCache[track.path];
@@ -459,6 +465,7 @@ function TracklistPanel({ tracks, allTracks, tags, categoryMeta, urlCache, resol
                 onDelete={handleDelete}
                 onRemoveFromPlaylist={handleRemoveFromPlaylist}
                 selectedPlaylistId={selectedPlaylistId}
+                selectedPlaylistType={selectedPlaylistType}
                 categories={categories}
                 catMetaMap={catMetaMap}
                 tagColorMap={tagColorMap}
@@ -477,8 +484,9 @@ function TracklistPanel({ tracks, allTracks, tags, categoryMeta, urlCache, resol
               onAddTag={onAddTag}
               onMoved={handleMoved}
               onDelete={handleDelete}
-              onRemoveFromPlaylist={null}
-              selectedPlaylistId={null}
+              onRemoveFromPlaylist={selectedPlaylistId !== null ? handleRemoveFromPlaylist : null}
+              selectedPlaylistId={selectedPlaylistId}
+              selectedPlaylistType={selectedPlaylistType}
               categories={categories}
               catMetaMap={catMetaMap}
               tagColorMap={tagColorMap}
