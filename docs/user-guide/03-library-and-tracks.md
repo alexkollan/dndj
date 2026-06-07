@@ -64,14 +64,20 @@ Click the three-dot menu on any row for:
 
 ## Renaming a track
 
-DNDj uses **Virtual Renaming**: when you rename a track, only its *display name*
-in the database changes — the actual file on disk keeps its original name.
+Renaming a track **renames the actual file on disk** to match the new name (the
+file extension is kept, and the name is cleaned of any characters that aren't
+valid in a filename). The track keeps all its tags, playlist spots, cue points,
+and scene assignments — those follow the track, not the filename.
 
-Why this matters:
+Good to know:
 
-- It never causes file-lock errors or conflicts with the operating system.
-- Custom names survive a re-scan — refreshing the library won't reset your names.
-- It's safe to rename freely; nothing on disk is at risk.
+- If a file with that exact name already exists in the folder, DNDj adds a small
+  suffix so nothing gets overwritten.
+- If the track is currently **playing on a deck**, the rename may fail because the
+  file is in use — stop it first, then rename.
+- Renames **sync correctly** to your other machine: on the next pull, the renamed
+  file is copied across and the old-named file is cleaned up automatically (see
+  [Syncing Two Machines](./10-sync.md)).
 
 ## Deleting a track
 
@@ -86,11 +92,43 @@ Choosing **🗑 Delete track** asks *where* to delete it:
 > **Deleting always removes the file from disk.** There is no "remove from
 > library but keep the file" option — delete means delete.
 
+## Missing files & the health check
+
+If you delete or move audio files (or a whole category folder) **outside** the
+app — straight from your file manager — the library and the files on disk fall out
+of sync. DNDj handles this in two ways.
+
+### On launch
+Every time the app starts it compares the database against your `sounds/` folder.
+If anything the library references has gone missing, a **Library Issues Found**
+window appears *before* the Studio loads. It lists:
+
+- **Missing categories** — a whole folder that's gone, and how many tracks it held.
+- **Missing tracks** — individual files that are gone, and **where each was
+  linked** (which playlists, folders, scenes, tags, and how many cue points).
+
+To keep everything consistent you then click **Clean up & continue**, which
+removes those dead entries from *everywhere* they appear (playlists, folders,
+scenes, tags, cue points). If something looks wrong — for example an external
+drive isn't plugged in — click **Quit app** instead, fix it, and relaunch.
+
+### Any time — the 🩺 button
+The **🩺 health-check button** in the top bar runs the same check on demand and
+shows a report: either *"Everything checks out"* or the same missing-items list,
+with a **Clean up** button. Use it whenever you've been reorganising files on disk
+and want to tidy the database.
+
+> **Tip:** deleting from *inside* the app (the row's 🗑) keeps everything in sync
+> automatically, so you'll rarely need the cleanup — it's there for when files
+> change behind the app's back.
+
 ## Categories
 
-A category is just a subfolder of `sounds/`. By default the category badge shows
-the raw folder name in grey. You can give each category a **friendly display
-name** and a **colour** in **Settings → Categories**:
+A category is just a subfolder of `sounds/` — **the names are entirely up to
+you**. There are no required or "special" folders; call them `dungeon`, `weather`,
+`boss`, anything. By default the category badge shows the raw folder name in grey.
+You can give each category a **friendly display name** and a **colour** in
+**Settings → Categories**:
 
 - Rename `atmos` to "Atmosphere", colour it emerald green.
 - Create a brand-new category (which also creates the folder on disk).
@@ -98,9 +136,14 @@ name** and a **colour** in **Settings → Categories**:
 
 See [Settings](./12-settings.md#categories-tab) for the full walkthrough.
 
-> **Convention:** atmosphere/ambient tracks loop by default when loaded on a
-> deck; a category literally named `sfx` is treated as one-shot (no loop) when
-> previewed. You can override looping per deck at any time.
+> **Does a category name change behaviour?** Almost never. The one and only
+> special case: a category named exactly **`sfx`** (lowercase) plays **once**
+> instead of looping when you use the ▶ *preview* button on a library row — handy
+> for one-shots. That's it. Everything else about category names is cosmetic.
+> Some names (`atmosphere`, `sfx`, `music`, `ambience`, `youtube`) come with a
+> default badge colour until you pick your own, and `youtube` is just the
+> pre-filled category in the import dialog. **Decks always start with looping on
+> regardless of category** — toggle it per deck with the **LP** button.
 
 ## Tags
 

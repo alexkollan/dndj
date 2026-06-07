@@ -94,6 +94,15 @@ When a track is deleted with `globalDelete` (see
 of the pull deletes the corresponding file and clears the queue. This is how
 "delete everywhere" propagates.
 
+### Renames
+A rename changes a track's `path` (the filename is part of it), which is the sync
+identity. To avoid leaving an orphan copy on the other machine, `rename-track`
+pushes the **old** path into `sync_deletions`. On the next pull the other machine:
+downloads the renamed file (it's "missing" by the size/path diff), receives the
+updated DB (new path), and then drains `sync_deletions` to remove the old-named
+file — a net rename, no duplicate. See
+[Library Scanner → Renaming](./08-library-scanner.md#renaming-renames-the-file).
+
 ### Dev vs prod reload
 In dev the handler reloads only the renderer (`webContents.reload()`), because
 `app.relaunch()` spawns a *detached* process and would sever the terminal that

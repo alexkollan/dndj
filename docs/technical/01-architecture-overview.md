@@ -116,6 +116,7 @@ wholesale. This keeps the renderer a thin reflection of the database.
 | `libraryScanner.js` | Walk `sounds/`, upsert tracks, mark missing | [08](./08-library-scanner.md) |
 | `src/db/db_manager.js` | Schema, migrations, prepared statements | [04](./04-database.md) |
 | `src/audioEngine.js` | Web Audio playback: players, decks, sampler, events | [05](./05-audio-engine.md) |
+| `src/integrity.js` | DB↔filesystem delta, cleanup, rename/snapshot helpers | [13](./13-integrity.md) |
 | `src/store.js` | Zustand UI + audio stores | [06](./06-renderer-and-state.md) |
 | `src/App.jsx` | Root state, engine↔store wiring, library loading | [06](./06-renderer-and-state.md) |
 | `src/components/studio/*` | The entire live UI | [07](./07-components.md) |

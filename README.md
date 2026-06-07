@@ -55,7 +55,9 @@ module, run `npm run rebuild`.
 
 ### Add your sounds
 
-Drop audio files into subfolders of `sounds/` — **each subfolder is a category**:
+Drop audio files into subfolders of `sounds/` — **each subfolder is a category**.
+The names are entirely your choice; the layout below is just an example, not a
+required structure:
 
 ```
 sounds/
@@ -65,6 +67,10 @@ sounds/
 ├── tavern/       ← social / town music
 └── sfx/          ← one-shot sound effects
 ```
+
+> The only name with any behaviour attached is **`sfx`** (lowercase): tracks in
+> it play *once* instead of looping when previewed from the library list.
+> Everything else is free-form.
 
 Then click **↻ Refresh** in the app (or relaunch). New tracks appear in
 *My Library*. You can rename, recolour categories, tag, and reorganise everything

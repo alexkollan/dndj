@@ -18,6 +18,7 @@ JavaScript, React, and Electron. For end-user feature docs, see the
 10. **[Sync System](./10-sync-system.md)** — the HTTP server, the pull client, DuckDNS, and the database hot-swap on pull.
 11. **[Design System](./11-design-system.md)** — the token file and CSS conventions.
 12. **[Build & Dev Workflow](./12-build-and-dev.md)** — Vite config, npm scripts, and dev-vs-production behaviour.
+13. **[Integrity & Reliability](./13-integrity.md)** — DB↔filesystem checks, the launch cleanup gate, the health-check button, and real renames.
 
 ## Tech stack
 
@@ -49,6 +50,7 @@ dndj/
     ├── main.jsx            # React mount
     ├── App.jsx             # Root component & top-level state
     ├── audioEngine.js      # Audio playback core
+    ├── integrity.js        # DB↔filesystem checks, cleanup, rename helpers
     ├── store.js            # Zustand stores
     ├── db/db_manager.js    # SQLite schema + prepared statements
     ├── sync/               # syncServer.js, syncClient.js, duckdns.js

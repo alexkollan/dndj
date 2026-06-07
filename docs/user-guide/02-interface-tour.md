@@ -37,6 +37,9 @@ Across the very top:
   is shown beside it.
 - **■ STOP** — panic button. Immediately stops every sound: both decks, the third
   deck, and all sampler voices.
+- **🩺 (health check)** — scans your files against the library and reports anything
+  missing. See [Library & Tracks → Missing files](./03-library-and-tracks.md#missing-files--the-health-check).
+- **? (guides)** — opens this documentation inside the app, with search.
 - **⚙ (gear)** — opens the **Library Settings** dialog (categories, tags,
   keyboard shortcuts, and sync). See [Settings](./12-settings.md).
 

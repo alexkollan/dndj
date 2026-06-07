@@ -53,8 +53,8 @@ The deck glows while it's playing.
 
 DNDj can loop a deck endlessly — perfect for atmosphere beds.
 
-- **LP** — toggle looping on/off for the deck. (Atmosphere/ambient tracks start
-  with looping on; others start off.)
+- **LP** — toggle looping on/off for the deck. (A freshly loaded deck always
+  starts with looping **on**, regardless of the track's category.)
 - **IN** — set the loop start point at the current playhead position.
 - **OUT** — set the loop end point at the current position.
 - **CLR** — clear the custom loop points (appears once you've set any).

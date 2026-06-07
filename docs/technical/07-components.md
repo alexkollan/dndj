@@ -30,8 +30,10 @@ App.jsx
     │   └── DraggableRow / SortableRow → RowInner
     ├── SamplerStrip            (bottom)
     │   └── SamplerPad ×8
-    └── LibrarySettingsModal    (on demand)
-        └── CategoriesTab, TagsTab, ShortcutsTab, SyncTab
+    ├── LibrarySettingsModal    (on demand)
+    │   └── CategoriesTab, TagsTab, ShortcutsTab, SyncTab
+    ├── DocsModal               (on demand — top-bar ?)
+    └── IntegrityModal          (on demand — top-bar 🩺; also launch gate in App.jsx)
 ```
 
 ---
@@ -164,6 +166,29 @@ Tabbed dialog: **CategoriesTab** (CRUD category meta + create folder),
 **TagsTab** (CRUD tags), **ShortcutsTab** (static reference), **SyncTab** (server
 toggle, DuckDNS, saved connection chips, pull with progress — see
 [Sync System](./10-sync-system.md)). Shares a `ColorPicker` swatch grid.
+
+## `DocsModal.jsx`
+The in-app documentation viewer (top-bar **?** button). Two tabs (User Guide /
+Technical), each starting at its `README.md`. Renders markdown via `react-markdown`
++ `remark-gfm` + `rehype-slug`. A custom link renderer routes `.md`/anchor links to
+in-app navigation (resolving relative paths against the current doc, auto-switching
+tab across sections) and external links to `openExternal`. Includes per-section
+full-text search (`docsSearch`) with a results panel and in-document match
+highlighting via a small rehype plugin. Reads files through
+`docsRead`/`docsList`/`docsSearch`.
+
+## `IntegrityModal.jsx`
+The DB↔filesystem health dialog. Two modes via the `mode` prop:
+- **`launch`** — blocking gate rendered by `App.jsx` when the startup
+  [integrity check](./13-integrity.md) finds missing files/categories. Lists
+  missing categories and missing tracks (with per-track linkage: playlists,
+  folders, scenes, tags, cue points) and forces **Clean up & continue** or
+  **Quit** (`quitApp`).
+- **`report`** — on-demand, opened by the top-bar **🩺** button in `StudioLayout`;
+  shows "all good" or the same issue list with an optional **Clean up**.
+
+Both call `integrityCheck` / `integrityCleanup`. See
+[Integrity & Reliability](./13-integrity.md).
 
 ---
 

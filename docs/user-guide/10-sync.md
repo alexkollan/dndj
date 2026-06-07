@@ -89,6 +89,14 @@ When you delete a track and choose **⚠ Everywhere (on next sync)**, that delet
 is queued. The next time the *other* machine pulls, DNDj also removes that file
 there. See [Library & Tracks → Deleting](./03-library-and-tracks.md#deleting-a-track).
 
+## Renaming tracks across machines
+
+Renaming a track renames its file on disk, which changes the file's identity for
+sync. DNDj handles this cleanly: on the next pull, the renamed file is copied to
+the other machine and the **old-named file is removed there automatically**, so
+you don't end up with duplicates. Just rename on whichever machine is "ahead" and
+pull from it as usual.
+
 ## What gets synced vs. what stays local
 
 | Synced (server → client) | Stays on each machine |

@@ -93,6 +93,24 @@ a flat API at **`window.dndj`**. Every method is a thin wrapper around
 | `youtubeImport(opts)` | `youtube-import` | Download + transcode + insert; returns all tracks |
 | `onYoutubeProgress(cb)` / `offYoutubeProgress()` | `youtube-progress` (event) | Progress phases |
 
+### Database integrity
+| Method | Channel | Notes |
+|--------|---------|-------|
+| `integrityCheck()` | `integrity:check` | Read-only DB↔disk delta: `{ ok, missingCategories, missingTracks, scannedAt }` (tracks include per-link `links`) |
+| `integrityCleanup()` | `integrity:cleanup` | Transactionally removes missing entries everywhere; returns `{ result, tracks }` |
+| `quitApp()` | `app:quit` | Quits the app (used by the launch cleanup gate's "Quit") |
+
+See [Library Scanner](./08-library-scanner.md) and the
+[integrity module](../../src/integrity.js).
+
+### Documentation viewer
+| Method | Channel | Notes |
+|--------|---------|-------|
+| `docsList()` | `docs:list` | `{ 'user-guide': [...md], 'technical': [...md] }` |
+| `docsRead(relPath)` | `docs:read` | Reads a markdown file under `docs/` (path-traversal guarded) |
+| `docsSearch({section, query})` | `docs:search` | Per-section full-text search → `[{ path, title, count, snippets }]` |
+| `openExternal(url)` | `shell:open-external` | Opens an http(s) link in the default browser |
+
 ### Sync (request + event)
 | Method | Channel | Notes |
 |--------|---------|-------|
