@@ -154,6 +154,10 @@ function StudioLayout({
         setDeckState(prev => ({ ...prev, [id]: { isPlaying: false, isPaused: true } }));
       } else if (event === 'deckStopped' || event === 'deckEnded') {
         setDeckState(prev => ({ ...prev, [id]: { isPlaying: false, isPaused: false } }));
+      } else if (event === 'deckCleared') {
+        // The loaded track was deleted/moved/renamed out from under the deck.
+        setDeckTracks(prev => ({ ...prev, [id]: null }));
+        setDeckState(prev => ({ ...prev, [id]: INIT_DECK_STATE }));
       }
     });
     return () => unsub();

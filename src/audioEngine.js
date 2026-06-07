@@ -641,6 +641,36 @@ function getDeckLoopState(deckId) {
   return { isLoop: voice.isLoop, loopStart: voice.loopStart, loopEnd: voice.loopEnd };
 }
 
+// ─── File-handle release (guardrail for rename/move/delete) ───────────────────
+// Reconstruct the app:// URL for a relative track path. Must match main's
+// get-audio-url encoding (per-segment encodeURIComponent).
+function urlForRelPath(relPath) {
+  return 'app://audio/' + String(relPath).split('/').map(encodeURIComponent).join('/');
+}
+
+// Stop and fully unload every voice (preview player, sampler, deck) that points
+// at `url`, releasing the underlying file so the OS lock is dropped.
+function releaseUrl(url) {
+  if (players[url]) { try { stopTrack(url); } catch (_) {} unloadTrack(url); }
+  try { stopSampleByUrl(url); } catch (_) {}
+  for (const deckId of Object.keys(deckVoices)) {
+    const v = deckVoices[deckId];
+    if (v && v.url === url) {
+      destroyDeckVoice(v);
+      delete deckVoices[deckId];
+      emit('deckCleared', { deckId, url });
+    }
+  }
+}
+
+// Release file handles for the given relative paths, then wait briefly so the OS
+// finishes closing the descriptors before the file is moved/renamed/deleted.
+async function releaseTrackPaths(relPaths) {
+  const list = Array.isArray(relPaths) ? relPaths : [relPaths];
+  for (const p of list) { if (p) releaseUrl(urlForRelPath(p)); }
+  await new Promise(r => setTimeout(r, 60));
+}
+
 export {
   playTrack,
   stopTrack,
@@ -680,4 +710,6 @@ export {
   getDeckPosition,
   getDeckIsPlaying,
   getDeckLoopState,
+  // File-handle release
+  releaseTrackPaths,
 };

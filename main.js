@@ -729,6 +729,7 @@ ipcMain.handle('delete-category-meta', (_e, folderName) => {
 ipcMain.handle('delete-category', async (_e, folder, opts = {}) => {
   const action = opts.action || 'delete';
   const tracks = dbManager.db.prepare('SELECT id, path FROM tracks WHERE category = ?').all(folder);
+  const failed = []; // paths whose file op failed (locked) — DB left untouched for these
 
   if (action === 'move' && tracks.length > 0) {
     const target = opts.target || {};
@@ -752,29 +753,39 @@ ipcMain.handle('delete-category', async (_e, folder, opts = {}) => {
         destAbs = path.join(targetDir, destName);
       }
       const newRel = `${targetFolder}/${destName}`;
-      try { if (fs.existsSync(oldAbs)) fs.renameSync(oldAbs, destAbs); } catch {}
+      // Filesystem first; only update the DB row if the move actually happened.
+      if (fs.existsSync(oldAbs)) {
+        try { fs.renameSync(oldAbs, destAbs); }
+        catch { failed.push(t.path); continue; }
+      }
       dbManager.db.prepare('UPDATE tracks SET path = ?, category = ? WHERE id = ?').run(newRel, targetFolder, t.id);
       integrity.renameInSnapshots(dbManager.db, t.path, newRel);
       if (t.path !== newRel) dbManager.insertSyncDeletion.run(t.path);
     }
   } else if (tracks.length > 0) {
     const removedPaths = [];
-    const run = dbManager.db.transaction(() => {
-      for (const t of tracks) {
-        integrity.deleteTrackEverywhere(dbManager.db, t.id);
-        removedPaths.push(t.path);
-        dbManager.insertSyncDeletion.run(t.path);
+    for (const t of tracks) {
+      const abs = path.join(SOUNDS_DIR, ...t.path.split('/'));
+      // Filesystem first; only delete the DB row once the file is gone.
+      if (fs.existsSync(abs)) {
+        try { fs.unlinkSync(abs); }
+        catch { failed.push(t.path); continue; }
       }
-      integrity.scrubSnapshots(dbManager.db, removedPaths);
-    });
-    run();
+      integrity.deleteTrackEverywhere(dbManager.db, t.id);
+      dbManager.insertSyncDeletion.run(t.path);
+      removedPaths.push(t.path);
+    }
+    integrity.scrubSnapshots(dbManager.db, removedPaths);
   }
 
-  dbManager.deleteCategoryMeta.run(folder);
-  const catDir = path.join(SOUNDS_DIR, folder);
-  try { if (fs.existsSync(catDir)) fs.rmSync(catDir, { recursive: true, force: true }); } catch {}
+  // Only drop the category folder + metadata if every track was handled.
+  if (failed.length === 0) {
+    dbManager.deleteCategoryMeta.run(folder);
+    const catDir = path.join(SOUNDS_DIR, folder);
+    try { if (fs.existsSync(catDir)) fs.rmSync(catDir, { recursive: true, force: true }); } catch {}
+  }
 
-  return dbManager.getAllTracks.all();
+  return { tracks: dbManager.getAllTracks.all(), failed };
 });
 
 ipcMain.handle('move-track-to-category', async (_e, trackId, newCategory) => {
@@ -791,8 +802,11 @@ ipcMain.handle('move-track-to-category', async (_e, trackId, newCategory) => {
   if (!fs.existsSync(newDir)) fs.mkdirSync(newDir, { recursive: true });
   if (fs.existsSync(newAbs) && newAbs !== oldAbs) throw new Error(`A file named "${filename}" already exists in "${newCategory}"`);
 
+  // Filesystem first — only touch the DB once the move has actually happened.
   fs.renameSync(oldAbs, newAbs);
   dbManager.db.prepare('UPDATE tracks SET path = ?, category = ? WHERE id = ?').run(newRel, newCategory, trackId);
+  integrity.renameInSnapshots(dbManager.db, track.path, newRel);
+  if (track.path !== newRel) dbManager.insertSyncDeletion.run(track.path);
 
   return dbManager.getAllTracks.all();
 });
@@ -802,14 +816,20 @@ ipcMain.handle('move-track-to-category', async (_e, trackId, newCategory) => {
 ipcMain.handle('delete-track', async (_e, trackId, deleteFile = false, globalDelete = false) => {
   const track = dbManager.getTrackById.get(trackId);
   if (!track) throw new Error('Track not found');
+
+  // Filesystem first: if the file is present it MUST be removed before we touch
+  // the DB, otherwise a leftover file would reappear on the next scan. If it's
+  // locked we abort with the DB untouched — never desync.
   if (deleteFile) {
     const absPath = path.join(SOUNDS_DIR, ...track.path.split('/'));
-    try { if (fs.existsSync(absPath)) fs.unlinkSync(absPath); } catch (_) {}
+    if (fs.existsSync(absPath)) {
+      try { fs.unlinkSync(absPath); }
+      catch (e) { throw new Error(`Couldn't delete the file (it may be in use): ${e.message}`); }
+    }
   }
-  if (globalDelete && track.path) {
-    dbManager.insertSyncDeletion.run(track.path);
-  }
-  dbManager.deleteTrack.run(trackId);
+  if (globalDelete && track.path) dbManager.insertSyncDeletion.run(track.path);
+  integrity.deleteTrackEverywhere(dbManager.db, trackId);
+  integrity.scrubSnapshots(dbManager.db, [track.path]);
   return dbManager.getAllTracks.all();
 });
 

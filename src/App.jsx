@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { setMasterVolume, stopAll, subscribe } from './audioEngine.js';
+import { setMasterVolume, stopAll, subscribe, releaseTrackPaths } from './audioEngine.js';
 import { useAudioStore } from './store.js';
 import StudioLayout from './components/studio/StudioLayout.jsx';
 import IntegrityModal from './components/studio/IntegrityModal.jsx';
@@ -103,12 +103,15 @@ function App() {
 
   const handleRenameTrack = useCallback(async (trackId, newName) => {
     try {
+      // Release the file handle first so the on-disk rename can't be blocked.
+      const tr = allTracks.find(t => t.id === trackId);
+      if (tr?.path) await releaseTrackPaths([tr.path]);
       const updated = await window.dndj.renameTrack(trackId, newName);
       setAllTracks(updated);
     } catch (err) {
       alert(`Rename failed: ${err.message}`);
     }
-  }, []);
+  }, [allTracks]);
 
   const handleAddTag = useCallback(async (id, tag) => {
     const updated = await window.dndj.addTagToTrack(id, tag);

@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { useDraggable } from '@dnd-kit/core';
 import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { playTrack, stopTrack } from '../../audioEngine.js';
+import { playTrack, stopTrack, releaseTrackPaths } from '../../audioEngine.js';
 import { useAudioStore } from '../../store.js';
 import YoutubeImportDialog from './YoutubeImportDialog.jsx';
 import ImportDialog from './ImportDialog.jsx';
@@ -77,6 +77,7 @@ function RowInner({ track, isPlaying, onPlayToggle, onLoadToDeck, onRename, onAd
   const commitMove = useCallback(async () => {
     if (!moveTarget || moveTarget === track.category) { setMovingTo(false); setMenuOpen(false); return; }
     try {
+      await releaseTrackPaths([track.path]); // drop the file handle so the move can't be blocked
       const updated = await window.dndj.moveTrackToCategory(track.id, moveTarget);
       onMoved?.(updated);
     } catch (e) {
@@ -353,10 +354,12 @@ function TracklistPanel({ tracks, allTracks, tags, categoryMeta, urlCache, resol
 
   const handleDelete = useCallback(async (trackId, deleteFile, globalDelete = false) => {
     try {
+      const tr = (allTracks || []).find(t => t.id === trackId);
+      if (tr?.path) await releaseTrackPaths([tr.path]); // drop the file handle before deleting
       const updated = await window.dndj.deleteTrack(trackId, deleteFile, globalDelete);
       onTracksChange?.(updated);
     } catch (e) { alert(`Delete failed: ${e.message}`); }
-  }, [onTracksChange]);
+  }, [onTracksChange, allTracks]);
 
   const handleRemoveFromPlaylist = useCallback(async (playlistId, trackId) => {
     if (onRemoveFromPlaylist) {

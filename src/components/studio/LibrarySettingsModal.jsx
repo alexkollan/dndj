@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { releaseTrackPaths } from '../../audioEngine.js';
 import '../../styles/studio/LibrarySettingsModal.css';
 
 const PRESET_COLORS = [
@@ -96,14 +97,21 @@ function CategoriesTab({ allTracks, onRefresh, onCategoryMetaChange }) {
 
   const confirmDelete = async () => {
     const folder = deletingFolder;
-    const trackCount = (allTracks || []).filter(t => t.category === folder).length;
+    const inFolder = (allTracks || []).filter(t => t.category === folder);
     setDelBusy(true);
     try {
-      const opts = (trackCount > 0 && delMode === 'move') ? { action: 'move', target: delTarget } : { action: 'delete' };
-      await window.dndj.deleteCategory(folder, opts);
-      setDeletingFolder(null);
+      // Release any file handles for this category's tracks first, so the moves
+      // /deletes on disk can't be blocked by playback.
+      if (inFolder.length) await releaseTrackPaths(inFolder.map(t => t.path));
+      const opts = (inFolder.length > 0 && delMode === 'move') ? { action: 'move', target: delTarget } : { action: 'delete' };
+      const res = await window.dndj.deleteCategory(folder, opts);
       await load();
       await onRefresh();
+      if (res?.failed?.length) {
+        alert(`${res.failed.length} file(s) were in use and couldn't be ${delMode === 'move' ? 'moved' : 'deleted'}; the category was kept. Stop playback and try again.`);
+      } else {
+        setDeletingFolder(null);
+      }
     } catch (e) {
       alert(`Delete failed: ${e.message}`);
     } finally {
