@@ -29,6 +29,7 @@ function getAudioMime(filePath) {
   return AUDIO_MIME_TYPES[path.extname(filePath).toLowerCase()] || 'audio/mpeg';
 }
 const { scanLibrary } = require('./libraryScanner');
+const integrity = require('./src/integrity');
 let dbManager = require('./src/db/db_manager');
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -320,11 +321,70 @@ ipcMain.handle('rename-track', async (_event, trackId, newName) => {
   const track = dbManager.getTrackById.get(trackId);
   if (!track) throw new Error('Track not found');
 
-  // Virtual Rename: only update DB
-  dbManager.updateTrackDisplayName.run(newName, trackId);
+  const name = String(newName).trim();
+  if (!name) throw new Error('Name cannot be empty');
+
+  const oldRel = track.path;                          // e.g. "atmosphere/wind.mp3"
+  const parts = oldRel.split('/');
+  const oldFile = parts.pop();
+  const category = parts.join('/');                   // "" if track sits at sounds root
+  const ext = path.extname(oldFile);                  // ".mp3"
+
+  // Derive a filesystem-safe filename from the new display name, keep extension.
+  const safeBase = name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').trim().slice(0, 120) || 'track';
+  let newFile = `${safeBase}${ext}`;
+  let newRel = category ? `${category}/${newFile}` : newFile;
+
+  // If only the display text changed but the resulting filename is identical,
+  // there is no file to move — just update the name.
+  if (newRel === oldRel) {
+    dbManager.updateTrackDisplayName.run(name, trackId);
+    return dbManager.getAllTracks.all();
+  }
+
+  const oldAbs = path.join(SOUNDS_DIR, ...oldRel.split('/'));
+  if (!fs.existsSync(oldAbs)) throw new Error('Cannot rename: the audio file is missing on disk');
+
+  // Avoid clobbering an existing file with the same name.
+  let newAbs = path.join(SOUNDS_DIR, ...newRel.split('/'));
+  if (fs.existsSync(newAbs)) {
+    newFile = `${safeBase}_${Date.now()}${ext}`;
+    newRel = category ? `${category}/${newFile}` : newFile;
+    newAbs = path.join(SOUNDS_DIR, ...newRel.split('/'));
+  }
+
+  try {
+    fs.renameSync(oldAbs, newAbs);
+  } catch (e) {
+    throw new Error(`Rename failed (the file may be in use — stop it on the decks first): ${e.message}`);
+  }
+
+  // Queue the old path for deletion on other devices so a sync pull cleans up the
+  // orphan there (the renamed file arrives via the normal manifest download).
+  dbManager.insertSyncDeletion.run(oldRel);
+
+  // Update path + display name, and fix any scene snapshots that referenced it.
+  dbManager.db.prepare('UPDATE tracks SET path = ?, name = ? WHERE id = ?').run(newRel, name, trackId);
+  integrity.renameInSnapshots(dbManager.db, oldRel, newRel);
 
   return dbManager.getAllTracks.all();
 });
+
+// ─── Database Integrity ────────────────────────────────────────────────────────
+
+// Read-only delta between the DB and the filesystem. Caller should scan first
+// (so newly-added files are registered) — the launch flow and refresh both do.
+ipcMain.handle('integrity:check', () => {
+  return integrity.checkIntegrity({ db: dbManager.db, soundsDir: SOUNDS_DIR });
+});
+
+// Remove every DB entry whose file/category is missing, transactionally.
+ipcMain.handle('integrity:cleanup', () => {
+  const result = integrity.cleanupIntegrity({ db: dbManager.db, soundsDir: SOUNDS_DIR });
+  return { result, tracks: dbManager.getAllTracks.all() };
+});
+
+ipcMain.handle('app:quit', () => { app.quit(); });
 
 /**
  * Handle 'get-setting'

@@ -74,6 +74,11 @@ contextBridge.exposeInMainWorld('dndj', {
   onYoutubeProgress: (cb) => ipcRenderer.on('youtube-progress', (_, data) => cb(data)),
   offYoutubeProgress: () => ipcRenderer.removeAllListeners('youtube-progress'),
 
+  // Database integrity
+  integrityCheck: () => ipcRenderer.invoke('integrity:check'),
+  integrityCleanup: () => ipcRenderer.invoke('integrity:cleanup'),
+  quitApp: () => ipcRenderer.invoke('app:quit'),
+
   // Documentation
   docsList: () => ipcRenderer.invoke('docs:list'),
   docsRead: (relPath) => ipcRenderer.invoke('docs:read', relPath),
