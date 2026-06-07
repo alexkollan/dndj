@@ -21,6 +21,7 @@ import Crossfader from './Crossfader.jsx';
 import SamplerStrip from './SamplerStrip.jsx';
 import ScenePanel from './ScenePanel.jsx';
 import DocsModal from './DocsModal.jsx';
+import IntegrityModal from './IntegrityModal.jsx';
 import '../../styles/studio/StudioLayout.css';
 
 const INIT_DECK_STATE = { isPlaying: false, isPaused: false };
@@ -84,6 +85,8 @@ function StudioLayout({
   const [samplerKey, setSamplerKey] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [docsOpen, setDocsOpen] = useState(false);
+  const [healthOpen, setHealthOpen] = useState(false);
+  const [healthReport, setHealthReport] = useState(null);
   const [crossfaderKey, setCrossfaderKey] = useState(0);
   const [crossfaderInit, setCrossfaderInit] = useState({ pos: 0.5, curve: 'equal_power' });
 
@@ -213,6 +216,24 @@ function StudioLayout({
     await onLibraryRefresh?.();
     await loadCategoryMeta();
   }, [onLibraryRefresh, loadCategoryMeta]);
+
+  // ── Library health check (on-demand) ────────────────────────────────────────
+  const runHealthCheck = useCallback(async () => {
+    setHealthReport(null);
+    setHealthOpen(true);
+    await handleLibraryRefresh();            // re-scan disk so the report is current
+    const report = await window.dndj.integrityCheck();
+    setHealthReport(report);
+  }, [handleLibraryRefresh]);
+
+  const handleHealthCleanup = useCallback(async () => {
+    const { tracks } = await window.dndj.integrityCleanup();
+    onTracksChange?.(tracks);
+    await loadPlaylists();
+    await loadCategoryMeta();
+    const report = await window.dndj.integrityCheck();
+    setHealthReport(report);
+  }, [onTracksChange, loadPlaylists, loadCategoryMeta]);
 
   // ── Load tracks for selected playlist ───────────────────────────────────────
   const loadPlaylistTracks = useCallback(async (id) => {
@@ -546,6 +567,7 @@ function StudioLayout({
               <span className="studio__master-val">{Math.round(masterVolume * 100)}%</span>
             </div>
             <button className="studio__stop-btn" onClick={onStopAll}>■ STOP</button>
+            <button className="studio__settings-btn" onClick={runHealthCheck} title="Check library health">🩺</button>
             <button className="studio__settings-btn" onClick={() => setDocsOpen(true)} title="Guides & documentation">?</button>
             <button className="studio__settings-btn" onClick={() => setSettingsOpen(true)} title="Library settings">⚙</button>
           </div>
@@ -689,6 +711,15 @@ function StudioLayout({
       )}
 
       {docsOpen && <DocsModal onClose={() => setDocsOpen(false)} />}
+
+      {healthOpen && (
+        <IntegrityModal
+          mode="report"
+          report={healthReport}
+          onCleanup={handleHealthCleanup}
+          onClose={() => setHealthOpen(false)}
+        />
+      )}
 
     </DndContext>
   );

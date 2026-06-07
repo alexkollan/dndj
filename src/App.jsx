@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { setMasterVolume, stopAll, subscribe } from './audioEngine.js';
 import { useAudioStore } from './store.js';
 import StudioLayout from './components/studio/StudioLayout.jsx';
+import IntegrityModal from './components/studio/IntegrityModal.jsx';
 import './styles/global.css';
 
 function App() {
@@ -13,6 +14,7 @@ function App() {
   const [urlCache, setUrlCache] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [integrityReport, setIntegrityReport] = useState(null); // set when launch check finds issues
 
   // Wire audio engine events into the global audio store
   useEffect(() => {
@@ -46,6 +48,11 @@ function App() {
         ]);
         setAllTracks(tracks);
         setTags(loadedTags);
+
+        // Compare the database against the filesystem. If anything the DB
+        // references is missing on disk, gate the app behind a cleanup modal.
+        const report = await window.dndj.integrityCheck();
+        if (!report.ok) setIntegrityReport(report);
       } catch (err) {
         setError(`Initialization failed: ${err.message}`);
       } finally {
@@ -54,6 +61,16 @@ function App() {
     }
     init();
   }, []);
+
+  const handleIntegrityCleanup = useCallback(async () => {
+    const { tracks } = await window.dndj.integrityCleanup();
+    const freshTags = await window.dndj.getTags();
+    setAllTracks(tracks);
+    setTags(freshTags);
+    setIntegrityReport(null); // proceed into the Studio
+  }, []);
+
+  const handleQuit = useCallback(() => window.dndj.quitApp(), []);
 
   const handleMasterVolume = useCallback((vol) => {
     setMasterVolumeState(vol);
@@ -92,6 +109,17 @@ function App() {
 
   if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0f1623', color: '#6b7280', fontFamily: 'monospace' }}>Scanning library…</div>;
   if (error) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0f1623', color: '#ef4444', fontFamily: 'monospace', padding: 32 }}>{error}</div>;
+
+  if (integrityReport && !integrityReport.ok) {
+    return (
+      <IntegrityModal
+        mode="launch"
+        report={integrityReport}
+        onCleanup={handleIntegrityCleanup}
+        onQuit={handleQuit}
+      />
+    );
+  }
 
   return (
     <StudioLayout
