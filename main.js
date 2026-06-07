@@ -29,7 +29,7 @@ function getAudioMime(filePath) {
   return AUDIO_MIME_TYPES[path.extname(filePath).toLowerCase()] || 'audio/mpeg';
 }
 const { scanLibrary } = require('./libraryScanner');
-const dbManager = require('./src/db/db_manager');
+let dbManager = require('./src/db/db_manager');
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -712,6 +712,17 @@ ipcMain.handle('sync:update-duckdns', async (_e, { domain, token }) => {
   return { ok };
 });
 
+// Settings that belong to this machine and must survive a DB replacement
+const LOCAL_SETTING_KEYS = [
+  'sync_server_enabled',
+  'sync_token',
+  'sync_duckdns_domain',
+  'sync_duckdns_token',
+  'sync_client_url',
+  'sync_client_token',
+  'sync_saved_connections',
+];
+
 ipcMain.handle('sync:pull', async (_e, { serverUrl, token }) => {
   const send = data => mainWindow?.webContents.send('sync-progress', data);
   try {
@@ -724,33 +735,51 @@ ipcMain.handle('sync:pull', async (_e, { serverUrl, token }) => {
     });
 
     send({ phase: 'finalizing', text: 'Applying database...' });
+
+    // Snapshot all machine-local settings before the DB is replaced
+    const localSettings = {};
+    for (const key of LOCAL_SETTING_KEYS) {
+      const row = dbManager.getSetting.get(key);
+      if (row) localSettings[key] = row.value; // already JSON-stringified
+    }
+    // This machine is a client — never auto-start as server after reload
+    localSettings['sync_server_enabled'] = JSON.stringify(false);
+
+    // Replace the DB file
     dbManager.db.close();
     if (fs.existsSync(tempDbPath)) {
       if (fs.existsSync(DB_PATH)) fs.unlinkSync(DB_PATH);
       fs.renameSync(tempDbPath, DB_PATH);
     }
 
-    // Open the new DB to apply client-side fixups before restart.
-    const Database = require('better-sqlite3');
-    const tmpDb = new Database(DB_PATH);
+    // Re-open the DB module so all IPC handlers use the fresh database
+    delete require.cache[require.resolve('./src/db/db_manager')];
+    dbManager = require('./src/db/db_manager');
 
-    // Never auto-start as server on this (client) machine.
-    tmpDb.prepare(`INSERT OR REPLACE INTO settings (key, value) VALUES ('sync_server_enabled', 'false')`).run();
+    // Restore machine-local settings into the new DB
+    for (const [key, value] of Object.entries(localSettings)) {
+      dbManager.setSetting.run(key, value);
+    }
 
-    // Process global deletions queued by the server and clear them.
-    const pendingDeletions = tmpDb.prepare(`SELECT file_path FROM sync_deletions`).all();
+    // Process and clear global deletion queue from the incoming DB
+    const pendingDeletions = dbManager.getAllSyncDeletions.all();
     for (const { file_path } of pendingDeletions) {
       const absPath = path.join(SOUNDS_DIR, ...file_path.split('/'));
       try { if (fs.existsSync(absPath)) fs.unlinkSync(absPath); } catch {}
     }
-    if (pendingDeletions.length > 0) {
-      tmpDb.prepare(`DELETE FROM sync_deletions`).run();
+    if (pendingDeletions.length > 0) dbManager.clearSyncDeletions.run();
+
+    const isDev = !app.isPackaged;
+    if (isDev) {
+      // Dev mode: reload only the renderer — keeps the process alive and
+      // the terminal attached (app.relaunch would spawn a detached process)
+      send({ phase: 'done', text: `Sync complete — ${filesDownloaded} file(s) updated. Reloading…` });
+      setTimeout(() => mainWindow?.webContents.reload(), 1500);
+    } else {
+      send({ phase: 'done', text: `Sync complete — ${filesDownloaded} file(s) updated. Restarting…` });
+      setTimeout(() => { app.relaunch(); app.exit(0); }, 2000);
     }
 
-    tmpDb.close();
-
-    send({ phase: 'done', text: `Sync complete — ${filesDownloaded} file(s) updated. Restarting...` });
-    setTimeout(() => { app.relaunch(); app.exit(0); }, 2000);
     return { ok: true };
   } catch (err) {
     send({ phase: 'error', text: err.message });
