@@ -727,6 +727,13 @@ ipcMain.handle('sync:pull', async (_e, { serverUrl, token }) => {
       fs.renameSync(tempDbPath, DB_PATH);
     }
 
+    // The pulled DB may have sync_server_enabled=true (from the server machine).
+    // Always clear it so this machine does not auto-start as a server after restart.
+    const Database = require('better-sqlite3');
+    const tmpDb = new Database(DB_PATH);
+    tmpDb.prepare(`INSERT OR REPLACE INTO settings (key, value) VALUES ('sync_server_enabled', 'false')`).run();
+    tmpDb.close();
+
     send({ phase: 'done', text: `Sync complete — ${filesDownloaded} file(s) updated. Restarting...` });
     setTimeout(() => { app.relaunch(); app.exit(0); }, 2000);
     return { ok: true };
