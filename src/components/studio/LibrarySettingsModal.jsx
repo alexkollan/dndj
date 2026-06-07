@@ -354,6 +354,26 @@ function ShortcutsTab() {
 
 // ─── Sync Tab ─────────────────────────────────────────────────────────────────
 
+const CONN_COLORS = [
+  '#818cf8', '#10b981', '#f59e0b', '#ef4444',
+  '#22d3ee', '#fb923c', '#ec4899', '#6b7280',
+];
+
+function ColorDots({ value, onChange }) {
+  return (
+    <div className="sync-color-dots">
+      {CONN_COLORS.map(c => (
+        <button
+          key={c}
+          className={`sync-color-dot ${value === c ? 'sync-color-dot--active' : ''}`}
+          style={{ background: c }}
+          onClick={() => onChange(c)}
+        />
+      ))}
+    </div>
+  );
+}
+
 function SyncTab() {
   const [serverRunning, setServerRunning] = useState(false);
   const [serverInfo, setServerInfo] = useState(null);
@@ -364,6 +384,20 @@ function SyncTab() {
   const [clientToken, setClientToken] = useState('');
   const [pullState, setPullState] = useState({ phase: 'idle' });
   const [copied, setCopied] = useState(false);
+
+  // Saved connections
+  const [connections, setConnections] = useState([]);
+  const [savingNew, setSavingNew] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newColor, setNewColor] = useState(CONN_COLORS[0]);
+  const [editingId, setEditingId] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editColor, setEditColor] = useState(CONN_COLORS[0]);
+
+  async function persistConnections(list) {
+    setConnections(list);
+    await window.dndj.setSetting('sync_saved_connections', list);
+  }
 
   useEffect(() => {
     async function load() {
@@ -384,6 +418,9 @@ function SyncTab() {
         setServerUrl(`http://${status.info.localIp}:${status.info.port}`);
       }
       if (savedCToken) setClientToken(savedCToken);
+
+      const savedConns = await window.dndj.getSetting('sync_saved_connections');
+      if (Array.isArray(savedConns)) setConnections(savedConns);
     }
     load();
     window.dndj.onSyncProgress(data => setPullState(data));
@@ -423,11 +460,51 @@ function SyncTab() {
     setTimeout(() => setCopied(false), 1500);
   }
 
+  // ── Saved connections ──
+  async function commitSaveNew() {
+    if (!newName.trim()) return;
+    const conn = {
+      id: Date.now().toString(36),
+      name: newName.trim(),
+      url: serverUrl,
+      token: clientToken,
+      color: newColor,
+    };
+    await persistConnections([...connections, conn]);
+    setSavingNew(false);
+    setNewName('');
+    setNewColor(CONN_COLORS[0]);
+  }
+
+  function selectConnection(conn) {
+    setServerUrl(conn.url);
+    setClientToken(conn.token);
+  }
+
+  function startEdit(conn) {
+    setEditingId(conn.id);
+    setEditName(conn.name);
+    setEditColor(conn.color);
+  }
+
+  async function commitEdit() {
+    await persistConnections(connections.map(c =>
+      c.id === editingId ? { ...c, name: editName.trim() || c.name, color: editColor } : c
+    ));
+    setEditingId(null);
+  }
+
+  async function deleteConnection(id) {
+    await persistConnections(connections.filter(c => c.id !== id));
+    if (editingId === id) setEditingId(null);
+  }
+
   const isPulling = !['idle', 'done', 'error'].includes(pullState.phase);
   const isDone = pullState.phase === 'done';
   const isError = pullState.phase === 'error';
   const pullPct = (pullState.phase === 'files' && pullState.total > 0)
     ? Math.round((pullState.done / pullState.total) * 100) : null;
+  const canSaveNew = serverUrl.trim() && clientToken.trim();
 
   return (
     <div className="ls-tab-content ls-sync">
@@ -476,23 +553,9 @@ function SyncTab() {
             Keeps <strong>{ddDomain || 'your-domain'}.duckdns.org</strong> pointed at this machine's public IP every 30 min so your Mac can reach it from anywhere.
           </p>
           <div className="ls-sync-duckdns">
-            <input
-              className="ls-input"
-              placeholder="Domain name (e.g. akpchome)"
-              value={ddDomain}
-              onChange={e => setDdDomain(e.target.value)}
-            />
-            <input
-              className="ls-input"
-              placeholder="DuckDNS API token (from duckdns.org)"
-              value={ddApiToken}
-              onChange={e => setDdApiToken(e.target.value)}
-            />
-            <button
-              className={`ls-btn ${ddSaved ? 'ls-btn--success' : 'ls-btn--primary'}`}
-              onClick={saveDuckDns}
-              disabled={!ddDomain.trim() || !ddApiToken.trim()}
-            >
+            <input className="ls-input" placeholder="Domain name (e.g. akpchome)" value={ddDomain} onChange={e => setDdDomain(e.target.value)} />
+            <input className="ls-input" placeholder="DuckDNS API token (from duckdns.org)" value={ddApiToken} onChange={e => setDdApiToken(e.target.value)} />
+            <button className={`ls-btn ${ddSaved ? 'ls-btn--success' : 'ls-btn--primary'}`} onClick={saveDuckDns} disabled={!ddDomain.trim() || !ddApiToken.trim()}>
               {ddSaved ? 'Updated ✓' : 'Save & Update Now'}
             </button>
           </div>
@@ -505,9 +568,65 @@ function SyncTab() {
       <div className="ls-section-head">
         <span className="ls-section-title">Pull from Server</span>
       </div>
-      <p className="ls-sync-hint">
-        Connect to another machine running DNDj in server mode. Everything on that machine (database + audio files) will be downloaded to this device. The app will restart when complete.
-      </p>
+
+      {/* Saved connection chips */}
+      {connections.length > 0 && (
+        <div className="sync-chips">
+          {connections.map(conn =>
+            editingId === conn.id ? (
+              <div key={conn.id} className="sync-chip-edit">
+                <input
+                  className="sync-chip-edit__input"
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditingId(null); }}
+                  autoFocus
+                />
+                <ColorDots value={editColor} onChange={setEditColor} />
+                <div className="sync-chip-edit__actions">
+                  <button className="ls-btn ls-btn--primary ls-btn--xs" onClick={commitEdit}>Save</button>
+                  <button className="ls-btn ls-btn--ghost ls-btn--xs" onClick={() => setEditingId(null)}>Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <div key={conn.id} className="sync-chip" style={{ '--chip-color': conn.color }}>
+                <button className="sync-chip__name" onClick={() => selectConnection(conn)} title={`${conn.url}`}>
+                  {conn.name}
+                </button>
+                <button className="sync-chip__action" onClick={() => startEdit(conn)} title="Edit">✎</button>
+                <button className="sync-chip__action sync-chip__action--del" onClick={() => deleteConnection(conn.id)} title="Delete">×</button>
+              </div>
+            )
+          )}
+        </div>
+      )}
+
+      {/* Save new connection form */}
+      {savingNew ? (
+        <div className="sync-save-form">
+          <input
+            className="ls-input"
+            placeholder="Connection name (e.g. Home PC)"
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') commitSaveNew(); if (e.key === 'Escape') setSavingNew(false); }}
+            autoFocus
+          />
+          <ColorDots value={newColor} onChange={setNewColor} />
+          <div className="sync-save-form__actions">
+            <button className="ls-btn ls-btn--primary ls-btn--xs" onClick={commitSaveNew} disabled={!newName.trim()}>Save</button>
+            <button className="ls-btn ls-btn--ghost ls-btn--xs" onClick={() => setSavingNew(false)}>Cancel</button>
+          </div>
+        </div>
+      ) : (
+        canSaveNew && (
+          <button className="sync-save-btn" onClick={() => { setSavingNew(true); setNewName(''); }}>
+            + Save as connection
+          </button>
+        )
+      )}
+
+      {/* Connection inputs */}
       <div className="ls-sync-client">
         <input
           className="ls-input"
