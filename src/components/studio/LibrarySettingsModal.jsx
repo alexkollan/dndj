@@ -40,6 +40,12 @@ function CategoriesTab({ allTracks, onRefresh, onCategoryMetaChange }) {
   const [editDisplay, setEditDisplay] = useState('');
   const [editColor, setEditColor] = useState('#6b7280');
 
+  // Delete-category flow
+  const [deletingFolder, setDeletingFolder] = useState(null);
+  const [delMode, setDelMode] = useState('move');                          // 'move' | 'delete'
+  const [delTarget, setDelTarget] = useState({ mode: 'existing', value: '' }); // { mode:'existing'|'new', value, color?, display? }
+  const [delBusy, setDelBusy] = useState(false);
+
   // Derive existing folder names from tracks
   const folderNames = [...new Set((allTracks || []).map(t => t.category).filter(Boolean))].sort();
 
@@ -80,9 +86,29 @@ function CategoriesTab({ allTracks, onRefresh, onCategoryMetaChange }) {
     await onRefresh();
   };
 
-  const handleDeleteMeta = async (folder) => {
-    await window.dndj.deleteCategoryMeta(folder);
-    await load();
+  const startDelete = (folder) => {
+    setEditId(null);
+    setDeletingFolder(folder);
+    const others = allFolders.filter(f => f !== folder);
+    if (others.length) { setDelMode('move'); setDelTarget({ mode: 'existing', value: others[0] }); }
+    else { setDelMode('delete'); setDelTarget({ mode: 'new', value: '', color: '#6b7280', display: '' }); }
+  };
+
+  const confirmDelete = async () => {
+    const folder = deletingFolder;
+    const trackCount = (allTracks || []).filter(t => t.category === folder).length;
+    setDelBusy(true);
+    try {
+      const opts = (trackCount > 0 && delMode === 'move') ? { action: 'move', target: delTarget } : { action: 'delete' };
+      await window.dndj.deleteCategory(folder, opts);
+      setDeletingFolder(null);
+      await load();
+      await onRefresh();
+    } catch (e) {
+      alert(`Delete failed: ${e.message}`);
+    } finally {
+      setDelBusy(false);
+    }
   };
 
   return (
@@ -121,6 +147,9 @@ function CategoriesTab({ allTracks, onRefresh, onCategoryMetaChange }) {
           const display = m?.display_name || folder;
           const trackCount = (allTracks || []).filter(t => t.category === folder).length;
           const isEditing = editId === folder;
+          const isDeleting = deletingFolder === folder;
+          const moveTargets = allFolders.filter(f => f !== folder);
+          const newTargetInvalid = delMode === 'move' && delTarget.mode === 'new' && !delTarget.value.trim();
 
           return (
             <div key={folder} className="ls-row">
@@ -140,6 +169,65 @@ function CategoriesTab({ allTracks, onRefresh, onCategoryMetaChange }) {
                     <button className="ls-btn ls-btn--ghost ls-btn--xs" onClick={() => setEditId(null)}>Cancel</button>
                   </div>
                 </div>
+              ) : isDeleting ? (
+                <div className="ls-row__edit ls-catdel">
+                  {trackCount === 0 ? (
+                    <span className="ls-catdel__msg">Delete category “{display}”? The empty folder will be removed from disk.</span>
+                  ) : (
+                    <>
+                      <span className="ls-catdel__msg">
+                        “{display}” has <strong>{trackCount}</strong> track{trackCount !== 1 ? 's' : ''}. What should happen to them?
+                      </span>
+                      <label className="ls-catdel__opt">
+                        <input type="radio" name={`del-${folder}`} checked={delMode === 'move'} onChange={() => setDelMode('move')} />
+                        Move them to another category
+                      </label>
+                      {delMode === 'move' && (
+                        <div className="ls-catdel__move">
+                          <select
+                            className="ls-input ls-input--sm"
+                            value={delTarget.mode === 'new' ? '__new__' : delTarget.value}
+                            onChange={e => {
+                              if (e.target.value === '__new__') setDelTarget({ mode: 'new', value: '', color: '#6b7280', display: '' });
+                              else setDelTarget({ mode: 'existing', value: e.target.value });
+                            }}
+                          >
+                            {moveTargets.map(f => <option key={f} value={f}>{metaMap[f]?.display_name || f}</option>)}
+                            <option value="__new__">+ New category…</option>
+                          </select>
+                          {delTarget.mode === 'new' && (
+                            <div className="ls-catdel__new">
+                              <input
+                                className="ls-input ls-input--sm"
+                                placeholder="New category name"
+                                value={delTarget.value}
+                                onChange={e => setDelTarget(t => ({ ...t, value: e.target.value, display: e.target.value }))}
+                              />
+                              <ColorPicker value={delTarget.color} onChange={c => setDelTarget(t => ({ ...t, color: c }))} />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      <label className="ls-catdel__opt ls-catdel__opt--danger">
+                        <input type="radio" name={`del-${folder}`} checked={delMode === 'delete'} onChange={() => setDelMode('delete')} />
+                        ⚠ Delete the {trackCount} track{trackCount !== 1 ? 's' : ''} and their files
+                      </label>
+                    </>
+                  )}
+                  <div className="ls-row__edit-actions">
+                    <button
+                      className="ls-btn ls-btn--danger ls-btn--xs"
+                      onClick={confirmDelete}
+                      disabled={delBusy || newTargetInvalid}
+                    >
+                      {delBusy ? 'Working…'
+                        : trackCount === 0 ? 'Delete category'
+                        : delMode === 'move' ? 'Move & delete category'
+                        : 'Delete category & files'}
+                    </button>
+                    <button className="ls-btn ls-btn--ghost ls-btn--xs" onClick={() => setDeletingFolder(null)} disabled={delBusy}>Cancel</button>
+                  </div>
+                </div>
               ) : (
                 <>
                   <div className="ls-row__info">
@@ -149,9 +237,7 @@ function CategoriesTab({ allTracks, onRefresh, onCategoryMetaChange }) {
                   </div>
                   <div className="ls-row__actions">
                     <button className="ls-icon-btn" onClick={() => startEdit(folder)} title="Edit">✎</button>
-                    {!trackCount && (
-                      <button className="ls-icon-btn ls-icon-btn--danger" onClick={() => handleDeleteMeta(folder)} title="Remove metadata">×</button>
-                    )}
+                    <button className="ls-icon-btn ls-icon-btn--danger" onClick={() => startDelete(folder)} title="Delete category">🗑</button>
                   </div>
                 </>
               )}

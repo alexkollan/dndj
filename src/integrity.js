@@ -181,4 +181,4 @@ function renameInSnapshots(db, oldPath, newPath) {
   }
 }
 
-module.exports = { checkIntegrity, cleanupIntegrity, renameInSnapshots };
+module.exports = { checkIntegrity, cleanupIntegrity, renameInSnapshots, deleteTrackEverywhere, scrubSnapshots };

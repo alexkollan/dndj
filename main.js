@@ -721,6 +721,62 @@ ipcMain.handle('delete-category-meta', (_e, folderName) => {
   return dbManager.getAllCategoryMeta.all();
 });
 
+// Delete a whole category. `opts.action`:
+//   'move'   — relocate every track to opts.target (existing or new), then drop
+//              the (now empty) folder + metadata.
+//   'delete' — remove every track + its file, all references, then the folder.
+// In both cases the folder is removed from disk and old paths are queued for sync.
+ipcMain.handle('delete-category', async (_e, folder, opts = {}) => {
+  const action = opts.action || 'delete';
+  const tracks = dbManager.db.prepare('SELECT id, path FROM tracks WHERE category = ?').all(folder);
+
+  if (action === 'move' && tracks.length > 0) {
+    const target = opts.target || {};
+    const targetFolder = target.mode === 'new' ? importer.slugCategory(target.value) : (target.value || '');
+    if (!targetFolder) throw new Error('Choose a destination category.');
+    if (targetFolder === folder) throw new Error('Choose a different destination category.');
+
+    const targetDir = path.join(SOUNDS_DIR, targetFolder);
+    if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+    if (target.mode === 'new') {
+      dbManager.upsertCategoryMeta.run(targetFolder, target.display || target.value || targetFolder, target.color || '#6b7280');
+    }
+
+    for (const t of tracks) {
+      const fname = t.path.split('/').pop();
+      const oldAbs = path.join(SOUNDS_DIR, ...t.path.split('/'));
+      let destName = fname;
+      let destAbs = path.join(targetDir, destName);
+      if (fs.existsSync(destAbs) && destAbs.toLowerCase() !== oldAbs.toLowerCase()) {
+        destName = suffixedName(fname);
+        destAbs = path.join(targetDir, destName);
+      }
+      const newRel = `${targetFolder}/${destName}`;
+      try { if (fs.existsSync(oldAbs)) fs.renameSync(oldAbs, destAbs); } catch {}
+      dbManager.db.prepare('UPDATE tracks SET path = ?, category = ? WHERE id = ?').run(newRel, targetFolder, t.id);
+      integrity.renameInSnapshots(dbManager.db, t.path, newRel);
+      if (t.path !== newRel) dbManager.insertSyncDeletion.run(t.path);
+    }
+  } else if (tracks.length > 0) {
+    const removedPaths = [];
+    const run = dbManager.db.transaction(() => {
+      for (const t of tracks) {
+        integrity.deleteTrackEverywhere(dbManager.db, t.id);
+        removedPaths.push(t.path);
+        dbManager.insertSyncDeletion.run(t.path);
+      }
+      integrity.scrubSnapshots(dbManager.db, removedPaths);
+    });
+    run();
+  }
+
+  dbManager.deleteCategoryMeta.run(folder);
+  const catDir = path.join(SOUNDS_DIR, folder);
+  try { if (fs.existsSync(catDir)) fs.rmSync(catDir, { recursive: true, force: true }); } catch {}
+
+  return dbManager.getAllTracks.all();
+});
+
 ipcMain.handle('move-track-to-category', async (_e, trackId, newCategory) => {
   const track = dbManager.getTrackById.get(trackId);
   if (!track) throw new Error('Track not found');

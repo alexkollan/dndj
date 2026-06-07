@@ -60,6 +60,7 @@ contextBridge.exposeInMainWorld('dndj', {
   upsertCategoryMeta: (folderName, displayName, color) => ipcRenderer.invoke('upsert-category-meta', folderName, displayName, color),
   createCategory: (folderName, displayName, color) => ipcRenderer.invoke('create-category', folderName, displayName, color),
   deleteCategoryMeta: (folderName) => ipcRenderer.invoke('delete-category-meta', folderName),
+  deleteCategory: (folder, opts) => ipcRenderer.invoke('delete-category', folder, opts),
 
   // Tag management
   createTag: (name, color) => ipcRenderer.invoke('create-tag', name, color),
