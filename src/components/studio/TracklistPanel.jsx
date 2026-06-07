@@ -206,14 +206,11 @@ function RowInner({ track, isPlaying, onPlayToggle, onLoadToDeck, onRename, onAd
                 deleteMode ? (
                   <div className="tr-menu-delete-opts">
                     <span className="tr-menu-delete-label">Delete where?</span>
-                    <button className="tr-menu-item" onClick={e => { e.stopPropagation(); onDelete(track.id, false, false); setMenuOpen(false); setDeleteMode(false); }}>
-                      Remove from library
-                    </button>
                     <button className="tr-menu-item tr-menu-item--warn" onClick={e => { e.stopPropagation(); onDelete(track.id, true, false); setMenuOpen(false); setDeleteMode(false); }}>
-                      Delete from this machine
+                      This machine only
                     </button>
                     <button className="tr-menu-item tr-menu-item--danger" onClick={e => { e.stopPropagation(); onDelete(track.id, true, true); setMenuOpen(false); setDeleteMode(false); }}>
-                      ⚠ Delete everywhere
+                      ⚠ Everywhere (on next sync)
                     </button>
                     <button className="tr-menu-item tr-menu-item--cancel" onClick={e => { e.stopPropagation(); setDeleteMode(false); }}>
                       Cancel
