@@ -1,90 +1,158 @@
-# DNDj — Dungeon Master Soundboard
+# DNDj — Dungeon Master Soundboard & Studio
 
-A DJ-style soundboard and music manager built for Dungeon Masters running tabletop RPG (D&D) sessions. Manage and play local audio files organised by mood, trigger one-shot sound effects, crossfade between atmosphere tracks, and control everything from a clean, dark desktop interface.
+A DJ-style audio studio built for Dungeon Masters running tabletop RPG (D&D)
+sessions. Turn a folder of audio files into a professional mixing console: load
+tracks onto dual mixing decks, crossfade between moods, fire off one-shot sound
+effects, organise everything into playlists, snapshot a "scene" to recall it
+instantly, import audio from YouTube, and sync your whole library between two
+machines.
 
-## Tech Stack
+> 📖 **Full documentation lives in [`docs/`](./docs/README.md)** — a complete
+> [User Guide](./docs/user-guide/README.md) and
+> [Technical Documentation](./docs/technical/README.md) set. The same guides are
+> also browsable **inside the app** (the **?** button in the top bar) with search.
 
-| Layer | Choice | Reason |
-|-------|--------|--------|
-| Framework | Electron | Cross-platform desktop |
-| Frontend | React + Vite | Component isolation, HMR |
-| Audio Engine | Howler.js | Multi-channel, seamless looping, crossfade |
-| Dev tooling | electron-reloader + Vite HMR | Instant feedback on both layers |
+---
 
-## Getting Started
+## Tech stack
+
+| Layer | Choice | Why |
+|-------|--------|-----|
+| Desktop shell | [Electron](https://www.electronjs.org/) 35 | Cross-platform desktop, local file access |
+| Frontend | [React](https://react.dev/) 18 + [Vite](https://vitejs.dev/) 6 | Component isolation, fast HMR |
+| Audio | Web Audio API (`HTMLAudioElement` streaming, [Tone.js](https://tonejs.github.io/) context) | Sample-accurate looping, per-deck filter & gain, crossfade |
+| Database | [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) | Fast, synchronous, single portable file |
+| Drag & drop | [@dnd-kit](https://dndkit.com/) | Decks, pads, playlist tree, reordering |
+| UI state | [Zustand](https://github.com/pmndrs/zustand) | Lightweight layout/runtime state |
+| Media tooling | [yt-dlp](https://github.com/yt-dlp/yt-dlp) + [ffmpeg-static](https://github.com/eugeneware/ffmpeg-static) | YouTube import & transcoding |
+| Docs viewer | react-markdown + remark-gfm + rehype-slug | In-app guides with search |
+
+---
+
+## Getting started
+
+### Prerequisites
+- [Node.js](https://nodejs.org/) (latest LTS)
+- `npm`
+
+### Install & run
 
 ```bash
-# 1. Clone the repo
-git clone https://github.com/alexkollan/dndj.git
-cd dndj
-
-# 2. Install dependencies
+# 1. Install dependencies
 npm install
 
-# 3. Drop your MP3 files into the sounds/ subfolders
-#    sounds/atmosphere/  — looping background tracks
-#    sounds/combat/      — battle music
-#    sounds/exploration/ — travel / dungeon ambience
-#    sounds/tavern/      — social scene music
-#    sounds/sfx/         — one-shot sound effects
-
-# 4. Start the app
-npm start
-```
-
-For development with hot-reloading (Vite HMR + electron-reloader):
-
-```bash
+# 2. Launch in development (Vite HMR + Electron, the normal workflow)
 npm run dev
 ```
 
-## Project Structure
+`npm start` runs the app directly; `npm run dev` is the day-to-day mode with
+hot-reload. If you hit a `NODE_MODULE_VERSION` error from the native database
+module, run `npm run rebuild`.
+
+> This app is meant to run **from source in development mode** — there is no
+> installer or code-signing pipeline. See
+> [Build & Dev Workflow](./docs/technical/12-build-and-dev.md) for details.
+
+### Add your sounds
+
+Drop audio files into subfolders of `sounds/` — **each subfolder is a category**:
 
 ```
-dndj/
-├── main.js                  # Electron main process: window, IPC, protocol
-├── libraryScanner.js        # Scans /sounds folder recursively
-├── preload.js               # Exposes safe IPC bridge to renderer
-├── src/
-│   ├── main.jsx             # React entry point
-│   ├── App.jsx              # Root component, layout, state wiring
-│   ├── audioEngine.js       # All Howler.js logic (play, stop, loop, volume, crossfade)
-│   ├── components/
-│   │   ├── AtmospherePlayer.jsx   # Looping track list with volume + crossfade
-│   │   ├── Soundboard.jsx         # SFX button grid
-│   │   ├── TrackCard.jsx          # Individual track UI (reusable)
-│   │   ├── MasterControls.jsx     # Master volume, stop-all, hotkey display
-│   │   └── CategorySidebar.jsx    # Sidebar nav for sound categories
-│   └── styles/
-│       ├── global.css        # Dark mode base styles, CSS variables
-│       ├── atmosphere.css    # Atmosphere player styles
-│       ├── soundboard.css    # Soundboard grid styles
-│       └── controls.css      # Master controls + sidebar styles
-├── sounds/                  # Drop your MP3s here
-│   ├── atmosphere/
-│   ├── combat/
-│   ├── exploration/
-│   ├── tavern/
-│   └── sfx/
-├── index.html
-├── vite.config.js
-└── package.json
+sounds/
+├── atmosphere/   ← looping background moods
+├── combat/       ← battle music
+├── exploration/  ← travel & dungeon ambience
+├── tavern/       ← social / town music
+└── sfx/          ← one-shot sound effects
 ```
+
+Then click **↻ Refresh** in the app (or relaunch). New tracks appear in
+*My Library*. You can rename, recolour categories, tag, and reorganise everything
+from inside the app — see [Library & Tracks](./docs/user-guide/03-library-and-tracks.md).
+
+**Supported formats:** MP3 · OGG · WAV · WebM · M4A · AAC · FLAC · Opus
+
+---
 
 ## Features
 
-- **Automatic Library Scanning** — Drop an MP3 into a subfolder and it appears on next launch. No manual registration needed.
-- **Atmosphere Player** — Loop multiple tracks simultaneously. Per-track volume sliders. Crossfade between tracks.
-- **Soundboard** — Grid of one-shot SFX buttons. Multiple sounds can overlap.
-- **Master Controls** — Global volume slider and Stop All button.
-- **Hotkeys** — `Space` stops all sounds.
+- **Dual mixing decks (A & B)** with waveform display, seek, loops (with custom
+  in/out points), colour-coded cue markers, per-deck volume, and a low-pass
+  filter. → [Decks & Playback](./docs/user-guide/04-decks-and-playback.md)
+- **A third deck (C)** — a compact, crossfader-independent layer for a persistent
+  bed (storm, fire, drone), expandable to full size.
+- **Crossfader** with four curves (Natural / Slow / Linear / Cut) for seamless
+  mood changes. → [The Crossfader](./docs/user-guide/05-crossfader.md)
+- **Playlists** in three flavours — **Manual**, rule-based **Smart**, and nesting
+  **Folders**. → [Playlists](./docs/user-guide/06-playlists.md)
+- **Sampler pads** — eight one-shot SFX pads, triggerable by keys `1`–`8`,
+  overlapping voices. → [Sampler Pads](./docs/user-guide/07-sampler-pads.md)
+- **Scenes** — snapshot the entire board (all decks, crossfader, pads) and recall
+  it instantly or with a crossfade. → [Scenes](./docs/user-guide/08-scenes.md)
+- **YouTube import** — pull audio straight from a link, with category/tag/format
+  options. → [YouTube Import](./docs/user-guide/09-youtube-import.md)
+- **Two-machine sync** — run one instance as a server and pull its library (DB +
+  audio) onto another over LAN or the internet (DuckDNS), with saved connections.
+  → [Syncing Two Machines](./docs/user-guide/10-sync.md)
+- **In-app guides with search** — the **?** button opens this documentation
+  rendered inside the app.
+- **Tags & categories** with custom names and colours, plus a powerful
+  search/filter bar. → [Settings](./docs/user-guide/12-settings.md)
+- **Keyboard-driven** playback for live use.
+  → [Keyboard Shortcuts](./docs/user-guide/11-keyboard-shortcuts.md)
 
-## Supported Audio Formats
+---
 
-MP3, OGG, WAV, WebM
+## Project structure
 
-## Notes
+```
+dndj/
+├── main.js                 # Electron main: window, app:// protocol, IPC, YouTube & sync
+├── preload.js              # Safe IPC bridge → window.dndj
+├── libraryScanner.js       # Scans sounds/ → database
+├── vite.config.js          # Renderer dev server & build
+├── index.html              # Renderer entry HTML
+├── docs/                   # Full user + technical documentation
+├── data/dndj.sqlite        # The database (created at runtime; gitignored)
+├── sounds/<category>/...   # Your audio files (gitignored)
+└── src/
+    ├── main.jsx            # React mount
+    ├── App.jsx             # Root state & wiring
+    ├── audioEngine.js      # Web Audio playback (players, decks, sampler)
+    ├── store.js            # Zustand stores
+    ├── db/db_manager.js    # SQLite schema + prepared statements
+    ├── sync/               # syncServer.js, syncClient.js, duckdns.js
+    ├── components/studio/  # The live Studio UI
+    └── styles/             # tokens.css + per-component CSS
+```
 
-- This app is for personal/local use and always runs in development mode.
-- No code signing or distribution pipeline is configured.
-- The `sounds/` directory is gitignored — add your own audio files locally.
+For how it all fits together, start with the
+[Architecture Overview](./docs/technical/01-architecture-overview.md).
+
+---
+
+## Where your data lives
+
+- **Audio files** stay where you put them, in `sounds/`. DNDj never renames the
+  files on disk — track names are stored separately (Virtual Renaming).
+- **Everything else** (names, tags, playlists, cue points, scenes, settings) lives
+  in a single SQLite file at `data/dndj.sqlite`. Back up that file to back up your
+  whole setup. Paths inside it are stored **relative**, so the database is portable
+  between machines (this is what powers sync).
+
+---
+
+## npm scripts
+
+| Script | Purpose |
+|--------|---------|
+| `npm run dev` | Vite dev server + Electron (normal workflow) |
+| `npm start` | Launch Electron |
+| `npm run build:vite` | Build the renderer into `dist/` |
+| `npm run rebuild` | Rebuild the native `better-sqlite3` addon for Electron |
+
+---
+
+## License
+
+MIT
