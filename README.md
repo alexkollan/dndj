@@ -4,7 +4,7 @@ A DJ-style audio studio built for Dungeon Masters running tabletop RPG (D&D)
 sessions. Turn a folder of audio files into a professional mixing console: load
 tracks onto dual mixing decks, crossfade between moods, fire off one-shot sound
 effects, organise everything into playlists, snapshot a "scene" to recall it
-instantly, import audio from YouTube, and sync your whole library between two
+instantly, import audio from YouTube (only from tracks you own), and sync your whole library between two
 machines.
 
 > 📖 **Full documentation lives in [`docs/`](./docs/README.md)** — a complete
