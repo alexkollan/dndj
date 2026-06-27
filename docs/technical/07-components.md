@@ -94,7 +94,8 @@ A full deck (used for A, B, and—inside the MiniDeck modal—C). Props:
 `deckId, track, url, isPlaying, isPaused, droppableId?`.
 
 - Local state for volume, filter, loop (enabled/start/end), duration, currentTime,
-  cue points, load flash.
+  cue points, load flash. Mixer state is initialised from `getDeckMixerState(deckId)`
+  at mount time so that Deck C re-mounts (modal open/close) don't reset the sliders.
 - Subscribes to engine events for its `deckId` (`deckMetadata`, `deckLoaded`,
   `deckStopped`, `deckMixerReset`, `deckLoopChanged`) and polls `getDeckPosition`
   via rAF for the time display.

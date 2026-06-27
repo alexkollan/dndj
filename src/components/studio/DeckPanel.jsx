@@ -3,7 +3,7 @@ import { useDroppable } from '@dnd-kit/core';
 import {
   playDeck, pauseDeck, stopDeck, seekDeck,
   setDeckVolume, setDeckFilter, setDeckLoop, setDeckLoopEnabled,
-  getDeckPosition, getDeckIsPlaying, subscribe,
+  getDeckPosition, getDeckIsPlaying, getDeckMixerState, subscribe,
 } from '../../audioEngine.js';
 import DeckWaveform from './DeckWaveform.jsx';
 import '../../styles/studio/DeckPanel.css';
@@ -25,11 +25,11 @@ function DeckPanel({ deckId, track, url, isPlaying, isPaused, droppableId: dropp
   const droppableId = droppableIdProp || `deck-${deckId}`;
   const { isOver, setNodeRef } = useDroppable({ id: droppableId });
 
-  const [volume, setVolume] = useState(0.8);
-  const [filterFreq, setFilterFreq] = useState(20000);
-  const [loopEnabled, setLoopEnabled] = useState(true);
-  const [loopStart, setLoopStart] = useState(0);
-  const [loopEnd, setLoopEnd] = useState(null);
+  const [volume, setVolume] = useState(() => getDeckMixerState(deckId)?.volume ?? 0.8);
+  const [filterFreq, setFilterFreq] = useState(() => getDeckMixerState(deckId)?.filterFreq ?? 20000);
+  const [loopEnabled, setLoopEnabled] = useState(() => getDeckMixerState(deckId)?.loopEnabled ?? true);
+  const [loopStart, setLoopStart] = useState(() => getDeckMixerState(deckId)?.loopStart ?? 0);
+  const [loopEnd, setLoopEnd] = useState(() => getDeckMixerState(deckId)?.loopEnd ?? null);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [cuePoints, setCuePoints] = useState([]);
