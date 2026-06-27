@@ -144,9 +144,12 @@ onRemoveFromPlaylist, onLibraryRefresh, onTracksChange`.
 - Sorting by name/category/duration (disabled when `isReorderable`, i.e. a Manual
   playlist, to preserve `sort_order`).
 - Rows: `DraggableRow` (library/non-reorderable) or `SortableRow` (manual playlist,
-  dnd-kit sortable); both render shared `RowInner`. Row menu actions: rename, add
-  tag, move-to-category, remove-from-playlist/folder/exclude (label depends on
-  `selectedPlaylistType`), delete (with the machine-only / everywhere choice).
+  dnd-kit sortable); both render shared `RowInner`. Both pass
+  `data: { type: 'track', trackId, trackName }` so `StudioLayout`'s `handleDragEnd`
+  can look up the track in `allTracks` regardless of which row type initiated the
+  drag. Row menu actions: rename, add tag, move-to-category,
+  remove-from-playlist/folder/exclude (label depends on `selectedPlaylistType`),
+  delete (with the machine-only / everywhere choice).
 - Reflects playback by reading `useAudioStore.playingUrls` keyed on the resolved
   URL.
 

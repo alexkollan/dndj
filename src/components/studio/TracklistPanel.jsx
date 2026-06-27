@@ -253,7 +253,7 @@ function DraggableRow({ track, isPlaying, onPlayToggle, onLoadToDeck, onRename, 
 
 // ─── Sortable row (playlist view) ─────────────────────────────────────────────
 function SortableRow({ track, isPlaying, onPlayToggle, onLoadToDeck, onRename, onAddTag, onMoved, onDelete, onRemoveFromPlaylist, selectedPlaylistId, selectedPlaylistType, categories, catMetaMap, tagColorMap }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: track.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: track.id, data: { type: 'track', trackId: track.id, trackName: track.name } });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
