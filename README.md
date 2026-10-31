@@ -45,12 +45,13 @@ npm install
 npm run dev
 ```
 
-`npm start` runs the app directly; `npm run dev` is the day-to-day mode with
-hot-reload. If you hit a `NODE_MODULE_VERSION` error from the native database
+Always run the app with `npm run dev` (Vite HMR + Electron with hot-reload).
+`npm start` exists but isn't the normal workflow. If you hit a `NODE_MODULE_VERSION` error from the native database
 module, run `npm run rebuild`.
 
-> This app is meant to run **from source in development mode** — there is no
-> installer or code-signing pipeline. See
+> This app is meant to run **from source in development mode** (`npm run dev`)
+> and will never be published or packaged — there is no installer or
+> code-signing pipeline. See
 > [Build & Dev Workflow](./docs/technical/12-build-and-dev.md) for details.
 
 ### Add your sounds

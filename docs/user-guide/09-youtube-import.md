@@ -24,7 +24,10 @@ use the feature, DNDj offers to download it for you:
 2. If you see *"yt-dlp is not installed"*, click **Install yt-dlp** and wait for
    it to finish.
 
-After that, the tool is ready and you won't be asked again.
+After that, the tool is ready and you won't be asked again. DNDj also updates
+yt-dlp automatically the first time you use YouTube import each session, because
+YouTube regularly breaks older versions. No other installs (like deno) are
+needed.
 
 ## Importing a track
 
@@ -56,6 +59,9 @@ on — drag it to decks, tag it, add it to playlists, etc.
 - **"Fetch" fails** — double-check the URL is a valid, public video.
 - **Stuck at "Resolving stream URL…"** — this step has no percentage; give it a
   moment, especially on slower connections.
+- **`HTTP Error 403: Forbidden`** — yt-dlp is usually out of date. DNDj
+  updates it automatically each session; if it still fails, run
+  `resources/yt-dlp -U` from the project folder and restart `npm run dev`.
 - **An error after install** — try the import again; if it persists, re-open the
   dialog so DNDj re-checks the helper tool.
 

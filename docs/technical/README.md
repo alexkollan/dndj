@@ -32,7 +32,7 @@ JavaScript, React, and Electron. For end-user feature docs, see the
 | Database | better-sqlite3 12 | Synchronous, prepared statements, single file |
 | Drag & drop | @dnd-kit/core + /sortable | Decks, pads, playlist tree, reordering |
 | Renderer state | Zustand 5 | One persisted UI store + one runtime audio store |
-| Media tooling | yt-dlp-wrap, ffmpeg-static | Bundled ffmpeg; yt-dlp downloaded on first use |
+| Media tooling | yt-dlp-wrap, ffmpeg-static | Bundled ffmpeg; yt-dlp downloaded on first use, self-updated each session, uses Electron's Node as its JS runtime |
 
 ## Repository layout (top level)
 

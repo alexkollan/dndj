@@ -33,10 +33,14 @@ bundling step for `main.js`, `preload.js`, `libraryScanner.js`, `db_manager.js`,
 | Reload after sync pull | `webContents.reload()` (keeps process + terminal) | `app.relaunch(); app.exit(0)` |
 | Hot reload | `electron-reloader` watches main + renderer | n/a |
 
-There is no packaging/installer pipeline configured — the app is intended to run
-from source (see the [user guide](../user-guide/01-getting-started.md)). That's why
-the dev-mode behaviours (especially the renderer-only reload after sync) are
-first-class: day-to-day use is `npm run dev`.
+There is no packaging/installer pipeline configured, and none is planned: the app
+is **always run from source with `npm run dev` and will never be published or
+packaged** (see the [user guide](../user-guide/01-getting-started.md)). The
+production column above is effectively dead code. That's why the dev-mode
+behaviours (especially the renderer-only reload after sync) are first-class, and
+why main-process code may rely on dev-only assumptions, e.g. the YouTube pipeline
+[runs Electron as Node](./09-youtube-pipeline.md#keeping-yt-dlp-working) as yt-dlp's
+JS runtime.
 
 ## Vite config (`vite.config.js`)
 

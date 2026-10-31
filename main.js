@@ -868,6 +868,24 @@ function ytDlpWrap() {
   return new Cls(YT_DLP_BIN);
 }
 
+// YouTube requires a JS runtime to solve its player challenges (otherwise downloads 403).
+// Reuse Electron's bundled Node by running it with ELECTRON_RUN_AS_NODE.
+const YT_JS_ARGS = ['--no-update', '--js-runtimes', `node:${process.execPath}`];
+const YT_SPAWN_OPTS = { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } };
+
+// YouTube breaks old yt-dlp versions regularly; self-update once per app session.
+let ytUpdatePromise = null;
+function ensureYtDlpUpdated() {
+  if (!ytUpdatePromise) {
+    ytUpdatePromise = new Promise(resolve => {
+      const proc = spawn(YT_DLP_BIN, ['-U']);
+      proc.on('close', resolve);
+      proc.on('error', resolve);
+    });
+  }
+  return ytUpdatePromise;
+}
+
 function ytSend(data) {
   mainWindow?.webContents.send('youtube-progress', data);
 }
@@ -901,8 +919,9 @@ ipcMain.handle('youtube-setup', async () => {
 
 // Fetch video metadata without downloading
 ipcMain.handle('youtube-get-info', async (_, url) => {
+  await ensureYtDlpUpdated();
   const wrap = ytDlpWrap();
-  const info = await wrap.getVideoInfo(url);
+  const info = JSON.parse(await wrap.execPromise([url, '--dump-json', '--no-playlist', ...YT_JS_ARGS], YT_SPAWN_OPTS));
   return {
     id: info.id,
     title: info.title,
@@ -925,6 +944,7 @@ ipcMain.handle('youtube-import', async (_, { url, category = 'youtube', displayN
     dbManager.upsertCategoryMeta.run(category, categoryDisplayName || category, newCategoryColor);
   }
 
+  await ensureYtDlpUpdated();
   const wrap = ytDlpWrap();
 
   ytSend({ phase: 'preparing', status: 'Resolving stream URL…' });
@@ -940,7 +960,8 @@ ipcMain.handle('youtube-import', async (_, { url, category = 'youtube', displayN
       '--newline',
       '--ffmpeg-location', path.dirname(ffmpegBin),
       '-o', outputTemplate,
-    ]);
+      ...YT_JS_ARGS,
+    ], YT_SPAWN_OPTS);
     proc.on('progress', p => ytSend({ phase: 'download', percent: Math.round(p.percent ?? 0) }));
     proc.on('close', resolve);
     proc.on('error', reject);
